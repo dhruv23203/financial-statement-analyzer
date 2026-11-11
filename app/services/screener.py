@@ -24,7 +24,8 @@ from sqlalchemy import select
 from app.analysis.health_score import OVERALL
 from app.analysis.ratios import RATIO_DEFINITIONS
 from app.database import repositories as repo
-from app.database.models import HealthScore, RatioResult, StandardizedFinancialFact
+from app.database.models import (RUN_SUCCESS, HealthScore, MarketSnapshot, RatioResult,
+                                 StandardizedFinancialFact)
 from app.services.context import AppContext
 from app.utils.exceptions import AnalyzerError, DataNotFoundError
 from app.utils.helpers import normalize_ticker
@@ -85,6 +86,14 @@ def screen_frame(ctx: AppContext) -> pd.DataFrame:
                 if f.fiscal_period_end == latest_runs[run_id][1].latest_fiscal_period and \
                         f.value is not None:
                     rows[run_id]["revenue"] = float(f.value)
+        # latest successful market snapshot per company (display / sizing only)
+        run_by_company = {company.id: run_id for run_id, (company, _) in latest_runs.items()}
+        for snap in session.scalars(select(MarketSnapshot).where(
+                MarketSnapshot.status == RUN_SUCCESS, MarketSnapshot.market_cap.is_not(None))
+                .order_by(MarketSnapshot.fetched_at, MarketSnapshot.id)):
+            run_id = run_by_company.get(snap.company_id)
+            if run_id is not None:
+                rows[run_id]["market_cap"] = float(snap.market_cap)
     return pd.DataFrame(list(rows.values()))
 
 
@@ -202,6 +211,8 @@ def field_descriptions() -> dict[str, str]:
     descriptions = {code: d.name for code, d in RATIO_DEFINITIONS.items()}
     descriptions.update({"score": "Overall financial health score",
                          "revenue": "Latest annual revenue (own currency)",
+                         "market_cap": "Market capitalisation (trading currency, latest "
+                                       "snapshot)",
                          "fiscal_year_end": "Latest fiscal year end"})
     for category in ("liquidity", "solvency", "profitability", "efficiency", "cash_flow"):
         descriptions[f"{category}_score"] = f"{category.replace('_', ' ').title()} category score"

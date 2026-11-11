@@ -1,0 +1,14 @@
+# Dark "trading terminal" theme for the dashboard (colours follow app/reporting/ui.py).
+[theme]
+base = "dark"
+primaryColor = "#2962ff"
+backgroundColor = "#0b0f17"
+secondaryBackgroundColor = "#141b2a"
+textColor = "#e6edf3"
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

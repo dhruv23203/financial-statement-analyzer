@@ -96,6 +96,20 @@ class YFinanceProvider(FinancialDataProvider):
             self._info_cache[ticker] = info if isinstance(info, dict) else {}
         return self._info_cache[ticker]
 
+    def fetch_price_history(self, ticker: str, period: str = "1y") -> pd.DataFrame:
+        interval = "1wk" if period in ("5y", "10y", "max") else "1d"
+        try:
+            frame = self._ticker(ticker).history(period=period, interval=interval,
+                                                 auto_adjust=False)
+        except Exception as exc:  # display-only data: log and show nothing
+            logger.warning("yfinance price history failed for %s", ticker,
+                           extra={"ticker": ticker, "error": repr(exc)})
+            return pd.DataFrame()
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            return pd.DataFrame()
+        columns = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in frame]
+        return frame[columns].dropna(subset=["Close"]) if "Close" in columns else pd.DataFrame()
+
     def fetch_market_snapshot(self, ticker: str) -> dict[str, Any]:
         info = self._info(ticker)
         if not info.get("marketCap"):

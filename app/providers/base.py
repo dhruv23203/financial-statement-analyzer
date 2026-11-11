@@ -42,3 +42,9 @@ class FinancialDataProvider(ABC):
         ``currency`` (trading currency) and optional ``provider_values`` (the provider's
         own multiples, kept only for cross-checking). Empty dict = not available."""
         return {}
+
+    def fetch_price_history(self, ticker: str, period: str = "1y") -> pd.DataFrame:
+        """Daily OHLCV prices (columns Open, High, Low, Close, Volume; date index) for
+        the dashboard's price chart. Display only - never used in any score. Empty frame =
+        not available."""
+        return pd.DataFrame()
