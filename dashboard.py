@@ -256,7 +256,7 @@ def render_company(analysis: StoredAnalysis) -> None:
     if check.get("status") in ("FAILED", "OVERRIDDEN"):
         (st.error if check["status"] == "FAILED" else st.info)(check.get("message", ""))
     if live:
-        c1, c2, _ = st.columns([2.2, 1.4, 3])
+        c1, c2 = st.columns([3, 2], gap="small")
         c1.segmented_control("Range", list(PRICE_RANGES), default="1Y", key="price_range",
                              label_visibility="collapsed")
         c2.segmented_control("Style", ["Line", "Candles"], default="Line", key="price_style",
