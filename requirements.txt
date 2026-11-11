@@ -1,0 +1,8 @@
+# Runtime dependencies of the hosted dashboard (tests and calibration tools excluded).
+yfinance>=0.2.54,<2.0
+pandas>=2.2,<4.0
+numpy>=1.26,<3.0
+SQLAlchemy>=2.0.30,<2.1
+alembic>=1.13,<2.0
+matplotlib>=3.8,<4.0
+streamlit>=1.40,<2.0

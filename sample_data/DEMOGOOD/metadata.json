@@ -1,0 +1,15 @@
+{
+  "name": "Demo Good Industries Ltd (synthetic)",
+  "exchange": "SAMPLE",
+  "sector": "Industrials",
+  "industry": "Specialty Industrial Machinery",
+  "country": "India",
+  "currency": "INR",
+  "market": {
+    "price": 250.0,
+    "market_cap": 55750000000,
+    "shares_outstanding": 223000000,
+    "currency": "INR",
+    "note": "synthetic market data for offline demos"
+  }
+}

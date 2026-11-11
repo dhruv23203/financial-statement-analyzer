@@ -1,0 +1,9 @@
+{
+  "description": "Manual corrections of the REPORTING CURRENCY LABEL for tickers where the provider's metadata is demonstrably wrong. Values are never converted - only the label stored with the statements changes. Add an entry only after checking the company's published financial statements, and record the evidence in 'reason'.",
+  "overrides": {
+    "HCLTECH.NS": {
+      "currency": "INR",
+      "reason": "Checked 2026-11-11: Yahoo metadata reports financialCurrency=USD (TTM revenue 1.48e10, i.e. ~USD 14.8 bn), but the annual statement rows show Total Revenue of 1.30e12, which matches HCL Technologies' consolidated revenue reported in INR (~Rs 1.3 lakh crore), not USD 1.3 trillion. The statement values are therefore in INR."
+    }
+  }
+}

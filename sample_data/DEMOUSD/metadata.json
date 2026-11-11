@@ -1,0 +1,15 @@
+{
+  "name": "Demo Buyback Corp (synthetic)",
+  "exchange": "SAMPLE",
+  "sector": "Technology",
+  "industry": "Software - Application",
+  "country": "United States",
+  "currency": "USD",
+  "market": {
+    "price": 120.0,
+    "market_cap": 7000000000,
+    "shares_outstanding": 58333333,
+    "currency": "USD",
+    "note": "synthetic market data for offline demos"
+  }
+}

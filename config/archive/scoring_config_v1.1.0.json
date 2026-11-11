@@ -1,0 +1,71 @@
+{
+  "methodology_version": "1.1.0",
+  "description": "Explainable Financial Health Score (Day 70). Each ratio is converted to 0-100 points by linear interpolation between the listed [ratio value, points] breakpoints (values below the first / above the last breakpoint receive the end-point score). A category score is the weighted average of the ratios that are available; the overall score is the weighted average of the categories that could be scored. Missing data is never given points - it lowers data coverage instead. This is an academic indicator, not a credit rating or an investment recommendation.",
+  "min_category_coverage": 0.5,
+  "min_categories_for_overall": 3,
+  "sector_exclusions_note": "Categories listed for a sector are NOT APPLICABLE to it and are not scored (they do not lower data coverage). Banks/insurers: working-capital liquidity, asset turnover and operating cash flow (which includes deposit and loan flows) do not measure their health; bank-specific metrics are outside the Semester 1 scope, so their overall score is unavailable rather than misleading.",
+  "sector_exclusions": {
+    "Financial Services": ["LIQUIDITY", "EFFICIENCY", "CASH_FLOW"]
+  },
+  "interpretation_bands": [
+    {"min": 75, "label": "STRONG"},
+    {"min": 60, "label": "MODERATE"},
+    {"min": 40, "label": "WEAK"},
+    {"min": 0, "label": "POOR"}
+  ],
+  "categories": {
+    "LIQUIDITY": {
+      "weight": 0.2,
+      "metrics": {
+        "current_ratio": {"weight": 0.6, "higher_is_better": true,
+                          "points": [[0.5, 0], [1.0, 40], [1.5, 70], [2.0, 90], [3.0, 100]]},
+        "quick_ratio": {"weight": 0.4, "higher_is_better": true,
+                        "points": [[0.3, 0], [0.7, 40], [1.0, 70], [1.5, 100]]}
+      }
+    },
+    "SOLVENCY": {
+      "weight": 0.2,
+      "metrics": {
+        "debt_to_equity": {"weight": 0.4, "higher_is_better": false,
+                           "points": [[0.0, 100], [0.5, 85], [1.0, 60], [2.0, 25], [3.0, 0]],
+                           "negative_equity_points": 0},
+        "debt_ratio": {"weight": 0.3, "higher_is_better": false,
+                       "points": [[0.3, 100], [0.5, 75], [0.7, 40], [0.9, 0]]},
+        "interest_coverage": {"weight": 0.3, "higher_is_better": true,
+                              "points": [[1.0, 0], [1.5, 20], [3.0, 50], [6.0, 80], [10.0, 100]]}
+      }
+    },
+    "PROFITABILITY": {
+      "weight": 0.2,
+      "metrics": {
+        "net_profit_margin": {"weight": 0.35, "higher_is_better": true,
+                              "points": [[-5.0, 0], [0.0, 20], [5.0, 50], [10.0, 75], [20.0, 100]]},
+        "return_on_assets": {"weight": 0.3, "higher_is_better": true,
+                             "points": [[-2.0, 0], [0.0, 20], [3.0, 50], [7.0, 80], [12.0, 100]]},
+        "return_on_equity": {"weight": 0.35, "higher_is_better": true,
+                             "points": [[-5.0, 0], [0.0, 20], [8.0, 50], [15.0, 80], [25.0, 100]],
+                             "negative_equity_points": 0}
+      }
+    },
+    "EFFICIENCY": {
+      "weight": 0.2,
+      "metrics": {
+        "asset_turnover": {"weight": 0.6, "higher_is_better": true,
+                           "points": [[0.2, 0], [0.5, 40], [1.0, 75], [1.5, 100]]},
+        "inventory_turnover": {"weight": 0.4, "higher_is_better": true,
+                               "points": [[1.0, 0], [3.0, 40], [6.0, 75], [10.0, 100]]}
+      }
+    },
+    "CASH_FLOW": {
+      "weight": 0.2,
+      "metrics": {
+        "operating_cash_flow_margin": {"weight": 0.4, "higher_is_better": true,
+                                       "points": [[-5.0, 0], [0.0, 20], [10.0, 60], [20.0, 90], [30.0, 100]]},
+        "cash_conversion": {"weight": 0.3, "higher_is_better": true,
+                            "points": [[0.0, 0], [0.5, 30], [0.8, 60], [1.0, 85], [1.2, 100]]},
+        "free_cash_flow_margin": {"weight": 0.3, "higher_is_better": true,
+                                  "points": [[-5.0, 0], [0.0, 25], [5.0, 55], [10.0, 80], [20.0, 100]]}
+      }
+    }
+  }
+}

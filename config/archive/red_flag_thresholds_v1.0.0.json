@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "description": "Thresholds for the explainable red-flag rules (Day 60). A red flag is a potential concern that deserves a closer look, not evidence of fraud or distress. Percentages are expressed in percent (20 = 20%).",
+  "rules": {
+    "RF01_PROFIT_CASH_DIVERGENCE": {
+      "enabled": true,
+      "name": "Profit and cash-flow divergence",
+      "min_net_income_growth_pct": 0.0,
+      "min_ocf_decline_pct": 0.0,
+      "high_severity_ocf_decline_pct": 25.0,
+      "default_severity": "MEDIUM"
+    },
+    "RF02_DEBT_GROWTH": {
+      "enabled": true,
+      "name": "Debt growing faster than revenue",
+      "debt_growth_pct": 20.0,
+      "revenue_flat_band_pct": 2.0,
+      "high_severity_debt_growth_pct": 50.0,
+      "default_severity": "MEDIUM"
+    },
+    "RF03_REVENUE_PROFIT_DECLINE": {
+      "enabled": true,
+      "name": "Revenue and net income both declining",
+      "high_severity_decline_pct": 10.0,
+      "default_severity": "MEDIUM"
+    },
+    "RF04_NEGATIVE_OPERATING_CASH_FLOW": {
+      "enabled": true,
+      "name": "Negative operating cash flow",
+      "default_severity": "MEDIUM",
+      "consecutive_years_for_high": 2
+    },
+    "RF05_LIQUIDITY_CONCERN": {
+      "enabled": true,
+      "name": "Weak liquidity (low current ratio)",
+      "current_ratio_threshold": 1.0,
+      "high_severity_below": 0.75,
+      "default_severity": "MEDIUM"
+    },
+    "RF06_WEAK_INTEREST_COVERAGE": {
+      "enabled": true,
+      "name": "Weak interest coverage",
+      "interest_coverage_threshold": 1.5,
+      "high_severity_below": 1.0,
+      "default_severity": "MEDIUM"
+    },
+    "RF07_NEGATIVE_EQUITY": {
+      "enabled": true,
+      "name": "Negative shareholders' equity",
+      "default_severity": "HIGH"
+    }
+  }
+}

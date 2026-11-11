@@ -1,0 +1,510 @@
+{
+  "methodology_version": "2.0.0",
+  "reconstructed_note": "RECONSTRUCTED on 2026-11-11: the original archive copy was deleted by mistake during the full-universe recalibration. Rebuilt from values printed during the session. Category/ratio weights (4 dp) and bands (2 dp) are exact; breakpoint values are rounded to 6 significant digits as printed in the 133-company calibration report.",
+  "description": "Data-calibrated Financial Health Score (133 large Indian and US companies, 532 company-years). Breakpoints = universe percentiles P5-P95; CRITIC weights; quartile bands.",
+  "min_category_coverage": 0.5,
+  "min_categories_for_overall": 3,
+  "sector_exclusions": {
+    "Financial Services": [
+      "LIQUIDITY",
+      "EFFICIENCY",
+      "CASH_FLOW"
+    ]
+  },
+  "interpretation_bands": [
+    {
+      "min": 58.11,
+      "label": "TOP QUARTILE"
+    },
+    {
+      "min": 48.82,
+      "label": "ABOVE MEDIAN"
+    },
+    {
+      "min": 41.28,
+      "label": "BELOW MEDIAN"
+    },
+    {
+      "min": 0,
+      "label": "BOTTOM QUARTILE"
+    }
+  ],
+  "categories": {
+    "LIQUIDITY": {
+      "weight": 0.19,
+      "metrics": {
+        "current_ratio": {
+          "weight": 0.5002,
+          "higher_is_better": true,
+          "points": [
+            [
+              0.714044,
+              5
+            ],
+            [
+              0.787504,
+              10
+            ],
+            [
+              0.979085,
+              25
+            ],
+            [
+              1.27697,
+              50
+            ],
+            [
+              1.84332,
+              75
+            ],
+            [
+              2.49998,
+              90
+            ],
+            [
+              2.98874,
+              95
+            ]
+          ]
+        },
+        "quick_ratio": {
+          "weight": 0.4998,
+          "higher_is_better": true,
+          "points": [
+            [
+              0.211899,
+              5
+            ],
+            [
+              0.278399,
+              10
+            ],
+            [
+              0.467848,
+              25
+            ],
+            [
+              0.733611,
+              50
+            ],
+            [
+              1.09783,
+              75
+            ],
+            [
+              1.66537,
+              90
+            ],
+            [
+              2.20554,
+              95
+            ]
+          ]
+        }
+      }
+    },
+    "SOLVENCY": {
+      "weight": 0.1793,
+      "metrics": {
+        "debt_to_equity": {
+          "weight": 0.2469,
+          "higher_is_better": false,
+          "points": [
+            [
+              0.00712,
+              95
+            ],
+            [
+              0.02354,
+              90
+            ],
+            [
+              0.118081,
+              75
+            ],
+            [
+              0.468312,
+              50
+            ],
+            [
+              1.3579,
+              25
+            ],
+            [
+              2.48678,
+              10
+            ],
+            [
+              4.50401,
+              5
+            ]
+          ],
+          "negative_equity_points": 0
+        },
+        "debt_ratio": {
+          "weight": 0.3277,
+          "higher_is_better": false,
+          "points": [
+            [
+              0.212336,
+              95
+            ],
+            [
+              0.278002,
+              90
+            ],
+            [
+              0.386529,
+              75
+            ],
+            [
+              0.573598,
+              50
+            ],
+            [
+              0.715751,
+              25
+            ],
+            [
+              0.834939,
+              10
+            ],
+            [
+              0.948694,
+              5
+            ]
+          ]
+        },
+        "interest_coverage": {
+          "weight": 0.4254,
+          "higher_is_better": true,
+          "points": [
+            [
+              2.08132,
+              5
+            ],
+            [
+              2.89733,
+              10
+            ],
+            [
+              5.65748,
+              25
+            ],
+            [
+              11.8924,
+              50
+            ],
+            [
+              37.5866,
+              75
+            ],
+            [
+              99.2389,
+              90
+            ],
+            [
+              202.404,
+              95
+            ]
+          ]
+        }
+      }
+    },
+    "PROFITABILITY": {
+      "weight": 0.174,
+      "metrics": {
+        "net_profit_margin": {
+          "weight": 0.3655,
+          "higher_is_better": true,
+          "points": [
+            [
+              1.91567,
+              5
+            ],
+            [
+              2.94258,
+              10
+            ],
+            [
+              6.30938,
+              25
+            ],
+            [
+              11.9239,
+              50
+            ],
+            [
+              18.5607,
+              75
+            ],
+            [
+              27.0135,
+              90
+            ],
+            [
+              32.3302,
+              95
+            ]
+          ]
+        },
+        "return_on_assets": {
+          "weight": 0.2897,
+          "higher_is_better": true,
+          "points": [
+            [
+              1.14072,
+              5
+            ],
+            [
+              2.25955,
+              10
+            ],
+            [
+              4.99414,
+              25
+            ],
+            [
+              9.2306,
+              50
+            ],
+            [
+              14.1416,
+              75
+            ],
+            [
+              19.4723,
+              90
+            ],
+            [
+              24.4557,
+              95
+            ]
+          ]
+        },
+        "return_on_equity": {
+          "weight": 0.3448,
+          "higher_is_better": true,
+          "points": [
+            [
+              3.38034,
+              5
+            ],
+            [
+              7.07252,
+              10
+            ],
+            [
+              12.3465,
+              25
+            ],
+            [
+              21.1118,
+              50
+            ],
+            [
+              33.6446,
+              75
+            ],
+            [
+              57.2464,
+              90
+            ],
+            [
+              101.322,
+              95
+            ]
+          ],
+          "negative_equity_points": 0
+        }
+      }
+    },
+    "EFFICIENCY": {
+      "weight": 0.2424,
+      "metrics": {
+        "asset_turnover": {
+          "weight": 0.4976,
+          "higher_is_better": true,
+          "points": [
+            [
+              0.312289,
+              5
+            ],
+            [
+              0.36771,
+              10
+            ],
+            [
+              0.503375,
+              25
+            ],
+            [
+              0.75838,
+              50
+            ],
+            [
+              1.15908,
+              75
+            ],
+            [
+              1.66856,
+              90
+            ],
+            [
+              1.97409,
+              95
+            ]
+          ]
+        },
+        "inventory_turnover": {
+          "weight": 0.5024,
+          "higher_is_better": true,
+          "points": [
+            [
+              1.21222,
+              5
+            ],
+            [
+              1.52866,
+              10
+            ],
+            [
+              2.66414,
+              25
+            ],
+            [
+              4.70981,
+              50
+            ],
+            [
+              9.10524,
+              75
+            ],
+            [
+              19.5511,
+              90
+            ],
+            [
+              25.4952,
+              95
+            ]
+          ]
+        }
+      }
+    },
+    "CASH_FLOW": {
+      "weight": 0.2142,
+      "metrics": {
+        "operating_cash_flow_margin": {
+          "weight": 0.2553,
+          "higher_is_better": true,
+          "points": [
+            [
+              2.18154,
+              5
+            ],
+            [
+              4.84495,
+              10
+            ],
+            [
+              9.81576,
+              25
+            ],
+            [
+              16.1207,
+              50
+            ],
+            [
+              25.0377,
+              75
+            ],
+            [
+              36.4468,
+              90
+            ],
+            [
+              46.5277,
+              95
+            ]
+          ]
+        },
+        "cash_conversion": {
+          "weight": 0.4516,
+          "higher_is_better": true,
+          "points": [
+            [
+              0.251015,
+              5
+            ],
+            [
+              0.664018,
+              10
+            ],
+            [
+              1.01567,
+              25
+            ],
+            [
+              1.33712,
+              50
+            ],
+            [
+              1.80876,
+              75
+            ],
+            [
+              2.70221,
+              90
+            ],
+            [
+              3.92692,
+              95
+            ]
+          ]
+        },
+        "free_cash_flow_margin": {
+          "weight": 0.2932,
+          "higher_is_better": true,
+          "points": [
+            [
+              -8.28841,
+              5
+            ],
+            [
+              -0.941421,
+              10
+            ],
+            [
+              3.58963,
+              25
+            ],
+            [
+              9.36833,
+              50
+            ],
+            [
+              17.6944,
+              75
+            ],
+            [
+              26.7388,
+              90
+            ],
+            [
+              32.841,
+              95
+            ]
+          ]
+        }
+      }
+    }
+  },
+  "calibration": {
+    "companies": 133,
+    "company_years": 532,
+    "category_weight_method": "CRITIC",
+    "breakpoint_method": "universe percentiles P5-P95 (rank scoring)",
+    "ratio_weight_method": "CRITIC within category"
+  }
+}

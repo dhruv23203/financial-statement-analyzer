@@ -1,0 +1,15 @@
+{
+  "name": "Demo Partial Data Ltd (synthetic)",
+  "exchange": "SAMPLE",
+  "sector": "Industrials",
+  "industry": "Engineering & Construction",
+  "country": "India",
+  "currency": "INR",
+  "market": {
+    "price": 90.0,
+    "market_cap": 9000000000,
+    "shares_outstanding": 100000000,
+    "currency": "INR",
+    "note": "synthetic market data for offline demos"
+  }
+}

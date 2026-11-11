@@ -1,0 +1,15 @@
+{
+  "name": "Demo Weak Manufacturing Ltd (synthetic)",
+  "exchange": "SAMPLE",
+  "sector": "Consumer Cyclical",
+  "industry": "Auto Parts",
+  "country": "India",
+  "currency": "INR",
+  "market": {
+    "price": 40.0,
+    "market_cap": 3000000000,
+    "shares_outstanding": 75000000,
+    "currency": "INR",
+    "note": "synthetic market data for offline demos"
+  }
+}

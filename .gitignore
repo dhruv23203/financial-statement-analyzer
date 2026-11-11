@@ -1,0 +1,13 @@
+# Generated while the app runs (not part of the deployment)
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+logs/
+exports/
+reports/
+data/raw/
+data/processed/
+data/backups/
+data/*.db-journal
