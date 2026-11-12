@@ -54,7 +54,8 @@ def score_gauge(score: float | None, label: str = "") -> go.Figure:
     fig = go.Figure(go.Indicator(
         mode="gauge" if missing else "gauge+number",
         value=0 if missing else score,
-        number=dict(font=dict(size=44), valueformat=".1f"),
+        number=dict(font=dict(size=44, family="Plus Jakarta Sans, Inter, sans-serif"),
+                    valueformat=".1f"),
         title=dict(text=label, font=dict(size=14, color=MUTED)),
         gauge=dict(
             axis=dict(range=[0, 100], tickwidth=1, tickcolor=MUTED,

@@ -37,7 +37,7 @@ def score_bands() -> tuple[tuple[float, str, str], ...]:
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
 
 /* ---------- design tokens (deep-navy fintech palette) ---------- */
 :root {
@@ -45,15 +45,29 @@ CSS = """
   --fsa-border: rgba(148,163,184,.14); --fsa-border-strong: rgba(148,163,184,.26);
   --fsa-text: #e6edf3; --fsa-muted: #8b97a8; --fsa-accent: #2962ff;
   --fsa-up: #26a69a; --fsa-down: #ef5350; --fsa-radius: 12px;
+  /* type system: display (headings, prices, key figures), body (text, labels),
+     mono (ticker-style numbers) */
+  --fsa-font-display: 'Plus Jakarta Sans', 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  --fsa-font-body: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --fsa-font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   --fsa-shadow: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.18);
 }
 html, body, [class*="css"], .stApp, .stMarkdown, button, input, textarea, select {
-  font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+  font-family: var(--fsa-font-body) !important;
 }
 .stApp {background: radial-gradient(1200px 600px at 85% -10%, rgba(41,98,255,.10), transparent 60%),
   var(--fsa-bg);}
 [data-testid="stDecoration"] {display: none;}
-h1, h2, h3, h4 {letter-spacing: -.02em;}
+h1, h2, h3, h4, h5, [data-testid="stHeading"] * {font-family: var(--fsa-font-display) !important;
+  letter-spacing: -.025em; font-weight: 700;}
+/* Streamlit styles <p>, <li>, labels and table cells directly, so set the body face there
+   too (icon spans use their own Material Symbols font and are not matched). */
+.stApp :is(p, li, label, input, textarea, td, th, summary, small) {
+  font-family: var(--fsa-font-body) !important;}
+.stApp p, .stApp li {line-height: 1.6;}
+[data-testid="stCaptionContainer"], .stCaption {color: var(--fsa-muted) !important; font-size: .8rem;
+  line-height: 1.55;}
+.stApp label p {font-weight: 600; font-size: .82rem; color: #b8c2cf;}
 /* Streamlit's fixed top bar is ~3.75rem tall: start content below it so the ticker tape
    (first element on the page) is never hidden behind the bar. */
 .block-container, .stMainBlockContainer {padding-top: 4.4rem !important; padding-bottom: 2rem;
@@ -182,7 +196,10 @@ h1, h2, h3, h4 {letter-spacing: -.02em;}
 .fsa-card .sub {font-size: .76rem; color: var(--fsa-muted); margin-top: .1rem;}
 .fsa-info {color: var(--fsa-muted); font-size: .85rem; margin-left: .15rem;}
 .fsa-card.has-tip {position: relative; cursor: pointer; outline: none;}
-.fsa-card.has-tip:hover, .fsa-card.has-tip:focus {border-color: rgba(41,98,255,.6); transform: translateY(-1px);}
+/* The hover lift (transform) creates a stacking context, so the tooltip's own z-index only
+   counts inside its card: raise the whole active card above the cards of the next row. */
+.fsa-card.has-tip:hover, .fsa-card.has-tip:focus, .fsa-card.has-tip:focus-within {
+  border-color: rgba(41,98,255,.6); transform: translateY(-1px); z-index: 60;}
 .fsa-card.has-tip:hover .fsa-info, .fsa-card.has-tip:focus .fsa-info {color: #5b8cff;}
 .fsa-tiptext {display: none; position: absolute; left: 0; right: 0; top: calc(100% + 6px);
   z-index: 50; padding: .6rem .75rem; border-radius: 10px; font-size: .8rem; font-weight: 400;
@@ -227,6 +244,29 @@ div[data-testid="stMetric"] {background: var(--fsa-surface); border-radius: var(
 .fsa-footer {margin-top: 2.2rem; padding: 1rem 0 .4rem 0; border-top: 1px solid var(--fsa-border);
   display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem;
   color: var(--fsa-muted); font-size: .76rem;}
+
+/* ---------- typography refinements ---------- */
+.fsa-brand .name, .fsa-hero h1, .fsa-section, .fsa-price .px, .fsa-card .val, .fsa-stats .v,
+.fsa-grade b, .fsa-glance .g b, .fsa-empty b, .fsa-box h4,
+.stTabs [data-testid="stTab"] p, .stTabs [data-baseweb="tab"] p,
+div[data-testid="stMetricValue"] {font-family: var(--fsa-font-display) !important;}
+.fsa-hero h1 {font-size: 1.85rem; font-weight: 800; letter-spacing: -.035em;
+  background: linear-gradient(90deg, #ffffff 0%, #c7d7ff 70%, #9fb9ff 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;}
+.fsa-brand .name {letter-spacing: -.02em;}
+.fsa-brand .name span {background: linear-gradient(90deg, #5b8cff, #26a69a);
+  -webkit-background-clip: text; background-clip: text; color: transparent;}
+.fsa-price .px {letter-spacing: -.035em;}
+.fsa-card .val {font-weight: 700; letter-spacing: -.025em;}
+.fsa-section {font-weight: 700; letter-spacing: -.025em; font-size: 1.18rem;}
+.fsa-section .hint {font-family: var(--fsa-font-body);}
+.fsa-card .lbl, .fsa-stats .k, .fsa-side-label, .fsa-tape .lead {font-family: var(--fsa-font-body);
+  font-weight: 600; letter-spacing: .085em;}
+.fsa-tape .item, .fsa-range-ends, .fsa-pill, .fsa-chip.accent {font-family: var(--fsa-font-mono) !important;
+  letter-spacing: -.01em;}
+.fsa-tape .item b {font-weight: 600;}
+.fsa-tiptext {font-family: var(--fsa-font-body); font-size: .82rem;}
+.fsa-box li, .fsa-flag .body {color: #c4cdd8;}
 @media (max-width: 640px) {
   .fsa-hero h1 {font-size: 1.35rem;} .fsa-price {text-align: left;} .fsa-price .px {font-size: 1.6rem;}
 }
