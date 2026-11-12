@@ -27,8 +27,9 @@ def _style(fig: go.Figure, height: int, legend: bool = True) -> go.Figure:
     fig.update_layout(
         template="plotly_dark", height=height, paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=10, r=10, t=30, b=10),
-        font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#c9d1d9"),
-        hoverlabel=dict(bgcolor="#141b2a", bordercolor="#2962ff", font_size=12),
+        font=dict(family="Inter, -apple-system, Segoe UI, sans-serif", size=12, color="#c9d1d9"),
+        hoverlabel=dict(bgcolor="#172033", bordercolor="#2962ff", font_size=12,
+                        font_family="Inter, sans-serif"),
         showlegend=legend,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, bgcolor="rgba(0,0,0,0)"),
         colorway=PALETTE)

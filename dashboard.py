@@ -186,17 +186,17 @@ def fmt_ratio(value: float | None, code: str) -> str:
 
 
 # ---------------------------------------------------------------------------- sidebar
-st.sidebar.markdown('<div class="fsa-brand">📊 Financial Statement <span>Analyzer</span>'
-                    '</div><div class="fsa-sub">NIFTY 500 + S&amp;P 500 · historical '
-                    'financial health</div>', unsafe_allow_html=True)
+st.sidebar.markdown(ui.brand(), unsafe_allow_html=True)
 provider_label = st.sidebar.radio("Data source", list(PROVIDERS), index=0, horizontal=True,
                                   help="Offline sample data needs no internet "
                                        "(DEMOGOOD, DEMOWEAK, DEMOUSD, DEMOPARTIAL).")
 PROVIDER = PROVIDERS[provider_label]
 ctx = get_context(PROVIDER)
 
+st.sidebar.markdown(ui.side_label("Analyse a company"), unsafe_allow_html=True)
 with st.sidebar.form("analyse"):
-    ticker_input = st.text_input("Analyse a company", placeholder="TCS.NS, INFY.NS, AAPL ...")
+    ticker_input = st.text_input("Ticker", placeholder="TCS.NS, INFY.NS, AAPL ...",
+                                 label_visibility="collapsed")
     submitted = st.form_submit_button("Fetch & analyse", type="primary", width="stretch")
 st.sidebar.caption("Indian stocks need .NS (NSE) or .BO (BSE). On the hosted demo, "
                    "companies you add are kept only until the app restarts (see Database).")
@@ -222,10 +222,15 @@ MARKER = latest_analysis_id(ctx)
 companies = cached_summaries(DB_KEY, MARKER)
 names = {c["ticker"]: c["name"] or "" for c in companies}
 analysed = [c["ticker"] for c in companies if c["analysed"]]
+st.sidebar.markdown(ui.side_label("Watchlist"), unsafe_allow_html=True)
+# A well-known, fully scored company makes a better first impression than the first
+# ticker in alphabetical order (often a bank, which has no overall score).
+PREFERRED_DEFAULTS = ("TCS.NS", "INFY.NS", "MSFT", "AAPL", "DEMOGOOD")
 if analysed:
-    default = st.session_state.get("selected")
+    default = st.session_state.get("selected") or next(
+        (t for t in PREFERRED_DEFAULTS if t in analysed), None)
     selected = st.sidebar.selectbox(
-        f"Watchlist · {len(analysed)} companies", analysed,
+        f"{len(analysed)} companies", analysed,
         index=analysed.index(default) if default in analysed else 0,
         format_func=lambda t: f"{t} · {names.get(t, '')}"[:48])
     st.session_state["selected"] = selected
@@ -236,6 +241,13 @@ else:
 st.sidebar.divider()
 st.sidebar.caption("Educational analysis - not a credit rating or investment advice. "
                    "Data: Yahoo Finance.")
+
+_tape_frame = cached_screen_frame(DB_KEY, MARKER)
+if not _tape_frame.empty and "score" in _tape_frame:
+    _top = _tape_frame.dropna(subset=["score"]).nlargest(30, "score")
+    html(ui.ticker_tape([(t, float(v), ui.score_color(float(v)))
+                         for t, v in zip(_top["ticker"], _top["score"])],
+                        "Top financial health scores"))
 
 tab_company, tab_compare, tab_screen, tab_map, tab_history, tab_db = st.tabs(
     ["📈 Company", "⚖️ Compare", "🔎 Screener", "🗺️ Market map", "🕘 History",
@@ -265,7 +277,38 @@ def render_header(analysis: StoredAnalysis, prices: pd.DataFrame, range_label: s
     elif market.get("price"):
         price, currency = f"{float(market['price']):,.2f}", market.get("currency")
     html(ui.hero(analysis.company_name or analysis.ticker, chips, price, currency, change,
-                 note))
+                 note, ticker=analysis.ticker))
+    render_quote_stats(analysis, market)
+
+
+def render_quote_stats(analysis: StoredAnalysis, market: dict) -> None:
+    """Quote statistics strip: 52-week range (live prices) and key market figures."""
+    year = cached_prices(PROVIDER, analysis.ticker, "1y") if PROVIDER == "yfinance" \
+        else pd.DataFrame()
+    latest = {o.code: o for o in analysis.ratios if o.period == analysis.latest_period}
+
+    def ratio_text(code: str) -> str:
+        o = latest.get(code)
+        return fmt_ratio(float(o.value), code) if o is not None and o.ok else "N/A"
+
+    items, range_html = [], ""
+    if not year.empty:
+        close = year["Close"]
+        high = float(year["High"].max()) if "High" in year else float(close.max())
+        low = float(year["Low"].min()) if "Low" in year else float(close.min())
+        range_html = ui.range_bar(low, high, float(close.iloc[-1]))
+        if len(close) > 1:
+            items.append(("Prev. close", f"{float(close.iloc[-2]):,.2f}"))
+        if "Volume" in year and year["Volume"].tail(63).sum() > 0:
+            items.append(("Avg. volume (3M)", ui.compact_number(float(
+                year["Volume"].tail(63).mean()))))
+    if market.get("market_cap"):
+        items.append(("Market cap", ui.compact_number(float(market["market_cap"]),
+                                                      market.get("currency"))))
+    items += [("P/E", ratio_text("price_to_earnings")),
+              ("Div. yield", ratio_text("dividend_yield"))]
+    if items or range_html:
+        html(ui.stats_strip(items, range_html))
 
 
 def render_scorecard(analysis: StoredAnalysis) -> None:
@@ -278,7 +321,7 @@ def render_scorecard(analysis: StoredAnalysis) -> None:
         "min_categories_for_overall"])
     g_col, r_col, k_col = st.columns([1, 1.15, 1.25], gap="medium")
     with g_col:
-        chart(plots.score_gauge(score, "Financial health score"), key="gauge")
+        chart(plots.score_gauge(score, "Health score"), key="gauge")
         interpretation = overall.interpretation if overall and overall.interpretation else \
             ui.NA_TEXT
         html(f'<div style="text-align:center;margin-top:-.6rem">'
@@ -319,6 +362,32 @@ def render_scorecard(analysis: StoredAnalysis) -> None:
                     st.caption(f"{c.category.title()}: {c.explanation[:220]}")
 
 
+def render_glance(analysis: StoredAnalysis) -> None:
+    """One-line summary first (task-oriented hierarchy): score, best and weakest
+    category, latest red flags and coverage."""
+    overall = analysis.overall()
+    score = None if overall is None or overall.score is None else float(overall.score)
+    cats = [c for c in analysis.latest_scores() if c.category != "OVERALL" and c.score is not None]
+    grades = analysis.summary.get("grades") or {}
+    items = [("Health", f"{score:.1f} · {overall.interpretation.title()}" if score is not None
+              and overall.interpretation else "N/A", ui.score_color(score))]
+    if cats:
+        best = max(cats, key=lambda c: float(c.score))
+        worst = min(cats, key=lambda c: float(c.score))
+        name = lambda c: c.category.replace("_", " ").title()  # noqa: E731
+        items.append(("Strongest", f"{name(best)} {grades.get(best.category) or ''}".strip(),
+                      ui.UP))
+        if worst.category != best.category:
+            items.append(("Weakest", f"{name(worst)} {grades.get(worst.category) or ''}".strip(),
+                          ui.DOWN))
+    flags = [f for f in analysis.flags if f.period == analysis.latest_period]
+    items.append(("Red flags", f"{len(flags)} in {tables.fy_label(analysis.latest_period)}",
+                  ui.DOWN if flags else ui.UP))
+    if overall is not None:
+        items.append(("Coverage", f"{overall.coverage:.0%}", None))
+    html(ui.glance(items))
+
+
 def render_key_numbers(analysis: StoredAnalysis) -> None:
     market = analysis.summary.get("market") or {}
     latest = {o.code: o for o in analysis.ratios if o.period == analysis.latest_period}
@@ -346,7 +415,7 @@ def render_key_numbers(analysis: StoredAnalysis) -> None:
     for code, label in KEY_RATIOS:
         value, sub = text(code)
         items.append((label, value, sub, None, METRIC_HELP[label]))
-    html(ui.section("Key numbers"))
+    html(ui.section("Key numbers", "latest fiscal year · tap a card for its formula"))
     html(ui.cards(items))
     if market:
         st.caption(f"Latest fiscal year: {analysis.latest_period:%d %b %Y}. Market multiples "
@@ -453,12 +522,14 @@ def render_company(analysis: StoredAnalysis) -> None:
         else:
             chart(plots.price_chart(prices, style), key="price")
 
+    render_glance(analysis)
+    html(ui.section("Financial health", "our 0-100 score, its five categories and grades"))
     render_scorecard(analysis)
     render_key_numbers(analysis)
 
     pros, cons = analysis.summary.get("pros") or [], analysis.summary.get("cons") or []
     if pros or cons:
-        html(ui.section("Strengths & weaknesses"))
+        html(ui.section("Strengths & weaknesses", "generated by explicit rules"))
         p_col, c_col = st.columns(2)
         with p_col:
             html(ui.bullet_box("✅ Pros", pros, "pros"))
@@ -467,7 +538,7 @@ def render_company(analysis: StoredAnalysis) -> None:
         st.caption("Generated by explicit rules from the numbers below (peer percentiles, "
                    "trends, red flags, published scores).")
 
-    html(ui.section("Financials"))
+    html(ui.section("Financials", f"amounts in {scale_for(analysis.currency)[1]}"))
     t_fin, t_ratio, t_score, t_trend = st.tabs(
         ["Key financials", "Ratios", "Score history", "Trends"])
     with t_fin:
@@ -509,7 +580,8 @@ def render_company(analysis: StoredAnalysis) -> None:
         with st.expander("Year-over-year detail"):
             show_table(tables.trend_frame(analysis.trends, analysis.currency))
 
-    html(ui.section(f"Red flags · {len(analysis.flags)} triggered (all years)"))
+    html(ui.section(f"Red flags · {len(analysis.flags)} triggered (all years)",
+                    "potential concerns, not proof of fraud or distress"))
     st.caption("Potential concerns that deserve a closer look - not proof of fraud or distress.")
     render_flag_status(analysis)
     recent = [f for f in analysis.flags if f.period == analysis.latest_period]
@@ -540,7 +612,8 @@ def render_company(analysis: StoredAnalysis) -> None:
 
 with tab_company:
     if selected is None:
-        st.info("Analyse a company from the sidebar to see its results here.")
+        html(ui.empty_state("📈", "No company selected",
+                            "Analyse a company from the sidebar to see its results here."))
     else:
         try:
             render_company(cached_analysis(PROVIDER, DB_KEY, selected, MARKER))
@@ -550,7 +623,7 @@ with tab_company:
 
 # ---------------------------------------------------------------------------- compare tab
 with tab_compare:
-    html(ui.section("Compare companies"))
+    html(ui.section("Compare companies", "side-by-side ratios, scores and snowflakes"))
     st.caption(f"Choose 2-{MAX_COMPARISON_COMPANIES} analysed companies. Ratios are compared "
                "across currencies; absolute amounts never are.")
     groups = {"(custom)": []} | {k: v for k, v in PEER_GROUPS.items()}
@@ -645,7 +718,7 @@ SCREEN_COLUMNS = {
 }
 
 with tab_screen:
-    html(ui.section("Stock screener"))
+    html(ui.section("Stock screener", "filter all analysed companies"))
     st.caption("Filter every analysed company with conditions joined by AND. Short names: "
                "roe, roa, roce, npm, de, pe, pb, cr, qr, piotroski, altman, beneish; text fields: "
                "sector, industry, currency. Missing values never pass a condition.")
@@ -655,8 +728,10 @@ with tab_screen:
         "Indian IT top scorers": 'sector == "Technology" and currency == INR and score > 55',
         "Possible earnings-manipulation profile": "beneish > -1.78",
     }
-    example = st.selectbox("Examples", ["(write your own)"] + list(examples))
-    query = st.text_input("Query", value=examples.get(example, "score > 60"))
+    example = st.pills("Popular screens", list(examples), selection_mode="single",
+                       key="screen_preset")
+    query = st.text_input("Query", value=examples.get(example or "", "score > 60"),
+                          help="Conditions joined by AND, e.g. roe > 15 and de < 0.5")
     s1, s2, s3 = st.columns([2, 1, 1])
     sort_by = s1.text_input("Sort by", value="score")
     limit = s2.number_input("Max rows", 5, 500, 50)
@@ -700,7 +775,7 @@ with tab_map:
     if frame.empty:
         st.info("No analysed companies yet.")
     else:
-        html(ui.section("Market map"))
+        html(ui.section("Market map", "every company, grouped by sector"))
         markets = {"India (INR)": "INR", "United States (USD)": "USD", "All": None}
         m1, m2, m3 = st.columns(3)
         market_pick = m1.selectbox("Market", list(markets))
@@ -836,3 +911,5 @@ with tab_db:
                                  "Rows": list(health.table_counts.values())}))
     st.subheader("All companies")
     show_table(pd.DataFrame(companies))
+
+html(ui.footer(f"v{scoring_settings(str(ctx.settings.scoring_config_file))['methodology_version']}"))
