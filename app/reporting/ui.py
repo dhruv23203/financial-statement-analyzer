@@ -67,7 +67,16 @@ CSS = """
   font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis;}
 .fsa-card .sub {font-size: .78rem; color: #8b97a8; margin-top: .1rem;}
-.fsa-info {color: #8b97a8; font-size: .8rem; cursor: help;}
+.fsa-info {color: #8b97a8; font-size: .85rem; margin-left: .15rem;}
+.fsa-card.has-tip {position: relative; cursor: pointer; outline: none;}
+.fsa-card.has-tip:hover, .fsa-card.has-tip:focus {border-color: rgba(41,98,255,.6);}
+.fsa-card.has-tip:hover .fsa-info, .fsa-card.has-tip:focus .fsa-info {color: #2962ff;}
+.fsa-tiptext {display: none; position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+  z-index: 50; padding: .6rem .75rem; border-radius: 10px; font-size: .8rem;
+  line-height: 1.4; background: #141b2a; color: #e6edf3; text-transform: none;
+  letter-spacing: normal; border: 1px solid #2962ff; box-shadow: 0 8px 24px rgba(0,0,0,.45);}
+.fsa-card.has-tip:hover .fsa-tiptext, .fsa-card.has-tip:focus .fsa-tiptext,
+.fsa-card.has-tip:focus-within .fsa-tiptext {display: block;}
 .fsa-status {display: grid; gap: .6rem; margin: .4rem 0 .8rem 0;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));}
 .fsa-grades {display: flex; flex-wrap: wrap; gap: .5rem; margin: .3rem 0 1rem 0;}
@@ -155,10 +164,16 @@ def cards(items: Iterable[tuple]) -> str:
         tip = item[4] if len(item) > 4 else None
         style = f' style="color:{color}"' if color else ""
         sub_html = f'<div class="sub">{escape(sub)}</div>' if sub else ""
-        tip_attr = f' title="{escape(tip)}"' if tip else ""
-        info = ' <span class="fsa-info">ⓘ</span>' if tip else ""
-        parts.append(f'<div class="fsa-card"{tip_attr}><div class="lbl">{escape(label)}{info}'
-                     f'</div><div class="val"{style}>{escape(value)}</div>{sub_html}</div>')
+        # CSS-only tooltip: shown on hover, and on click / tap / keyboard focus because
+        # the card is focusable (st.markdown strips scripts, and native title tooltips
+        # never appear on touch screens or on click).
+        focus = ' tabindex="0" role="button" aria-label="' + escape(f"{label}: {tip}") + '"' \
+            if tip else ""
+        info = ' <span class="fsa-info" aria-hidden="true">ⓘ</span>' if tip else ""
+        tip_html = f'<div class="fsa-tiptext">{escape(tip)}</div>' if tip else ""
+        parts.append(f'<div class="fsa-card{" has-tip" if tip else ""}"{focus}>'
+                     f'<div class="lbl">{escape(label)}{info}</div>'
+                     f'<div class="val"{style}>{escape(value)}</div>{sub_html}{tip_html}</div>')
     return f'<div class="fsa-grid">{"".join(parts)}</div>'
 
 
