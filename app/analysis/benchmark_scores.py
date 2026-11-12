@@ -21,6 +21,15 @@ Beneish M-Score (8-variable model)
     Journal, 55(5), 24-36. M = -4.84 + 0.920 DSRI + 0.528 GMI + 0.404 AQI + 0.892 SGI +
     0.115 DEPI - 0.172 SGAI + 4.679 TATA - 0.327 LVGI; M > -1.78 signals a higher
     probability of manipulation (a screening signal with many false positives).
+Applicability (see MODEL_SECTOR_EXCLUSIONS)
+    Altman's Z models and Beneish's M-Score were estimated on non-financial companies
+    (Altman 1968 used manufacturers; Beneish 1999 excluded financial firms). Their
+    balance-sheet inputs (working capital, receivables, asset quality) have a different
+    meaning for banks and insurers, so for Financial Services they are reported as
+    NOT_MEANINGFUL (reason MODEL_NOT_APPLICABLE) instead of producing false distress or
+    manipulation signals. Simply Wall St uses a separate model for banks, so its
+    non-financial health checks are excluded too. The Piotroski F-Score is still shown
+    for financials but its leverage/liquidity signals are weak for banks.
 Simply Wall St financial-health checks (0-6)
     Simply Wall St Company Analysis Model (MODEL.markdown, CC BY-NC-SA 4.0),
     github.com/SimplyWallSt/Company-Analysis-Model. Adaptations: debt-to-equity trend
@@ -260,6 +269,29 @@ def sws_health_checks(ds: FinancialDataset, period: date) -> RatioOutcome:
     passed = sum(bool(v) for v in checks.values())
     return ok(code, period, D(passed), {"checks": {k: int(bool(v)) for k, v in checks.items()}},
               "SIMPLY_WALL_ST_HEALTH", f"{passed}/6 Simply Wall St health checks passed.")
+
+
+MODEL_SECTOR_EXCLUSIONS: dict[str, tuple[str, ...]] = {
+    "Financial Services": ("altman_z_score", "altman_z_original", "beneish_m_score",
+                           "sws_health_checks"),
+}
+
+
+def apply_model_applicability(outcomes: list[RatioOutcome],
+                              sector: str | None) -> list[RatioOutcome]:
+    """Replace benchmark results that the published model does not support for this
+    sector with a NOT_MEANINGFUL outcome that explains why (no number is shown)."""
+    from app.analysis.ratios import MODEL_NOT_APPLICABLE
+
+    excluded = MODEL_SECTOR_EXCLUSIONS.get(sector or "", ())
+    if not excluded:
+        return outcomes
+    return [unavailable(o.code, o.period, MODEL_NOT_APPLICABLE,
+                        f"{o.definition.name} is not applicable to {sector} companies: the "
+                        "model was estimated on non-financial firms and its balance-sheet "
+                        "inputs mean something different for banks and insurers.",
+                        not_meaningful=True) if o.code in excluded else o
+            for o in outcomes]
 
 
 def calculate_benchmark_scores(ds: FinancialDataset, period: date) -> list[RatioOutcome]:

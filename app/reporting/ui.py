@@ -8,14 +8,32 @@ convention: teal = good / up, red = bad / down, blue = accent.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from html import escape
 from typing import Iterable
 
 UP, DOWN, ACCENT, MUTED = "#26a69a", "#ef5350", "#2962ff", "#8b97a8"
 GRADE_COLORS = {"A": "#26a69a", "B": "#66bb6a", "C": "#f9a825", "D": "#fb8c00", "F": "#ef5350"}
 SEVERITY_COLORS = {"HIGH": "#ef5350", "MEDIUM": "#fb8c00", "LOW": "#42a5f5"}
-BAND_COLORS = ((70, "#26a69a"), (55, "#66bb6a"), (40, "#f9a825"), (25, "#fb8c00"),
-               (0, "#ef5350"))
+# Colours for the four interpretation bands, best first (TOP QUARTILE ... BOTTOM QUARTILE).
+QUARTILE_COLORS = ("#26a69a", "#9ccc65", "#f9a825", "#ef5350")
+NA_TEXT = "N/A - Insufficient applicable financial data"
+
+
+@lru_cache(maxsize=1)
+def score_bands() -> tuple[tuple[float, str, str], ...]:
+    """(minimum score, label, colour) from the active scoring config, best band first.
+
+    Colours therefore always match the interpretation labels (the calibrated universe
+    quartiles), instead of arbitrary display cut-offs."""
+    from app.analysis.config_loader import load_scoring_config
+    from config.settings import get_settings
+
+    bands = load_scoring_config(get_settings().scoring_config_file)["interpretation_bands"]
+    ordered = sorted(bands, key=lambda b: -float(b["min"]))
+    colors = QUARTILE_COLORS if len(ordered) == len(QUARTILE_COLORS) else \
+        tuple(QUARTILE_COLORS[min(i, 3)] for i in range(len(ordered)))
+    return tuple((float(b["min"]), str(b["label"]), c) for b, c in zip(ordered, colors))
 
 CSS = """
 <style>
@@ -49,6 +67,9 @@ CSS = """
   font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis;}
 .fsa-card .sub {font-size: .78rem; color: #8b97a8; margin-top: .1rem;}
+.fsa-info {color: #8b97a8; font-size: .8rem; cursor: help;}
+.fsa-status {display: grid; gap: .6rem; margin: .4rem 0 .8rem 0;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));}
 .fsa-grades {display: flex; flex-wrap: wrap; gap: .5rem; margin: .3rem 0 1rem 0;}
 .fsa-grade {display: flex; align-items: center; gap: .5rem; padding: .35rem .7rem .35rem .35rem;
   border-radius: 10px; background: rgba(139,151,168,.07); border: 1px solid rgba(139,151,168,.16);
@@ -78,10 +99,19 @@ div[data-testid="stMetric"] {background: rgba(139,151,168,.07); border-radius: 1
 
 
 def score_color(score: float | None) -> str:
-    """Traffic-light colour for a 0-100 score (grey when missing)."""
+    """Colour of the interpretation band the score falls in (grey when missing)."""
     if score is None:
         return MUTED
-    return next(color for floor, color in BAND_COLORS if score >= floor)
+    return next((color for floor, _, color in score_bands() if score >= floor),
+                score_bands()[-1][2])
+
+
+def band_legend() -> str:
+    """Plain-text legend of the score colours, e.g. for chart captions."""
+    names = {"#26a69a": "teal", "#9ccc65": "light green", "#f9a825": "amber",
+             "#ef5350": "red"}
+    return ", ".join(f"{names.get(c, c)} = {label.lower()} (>= {floor:g})" if floor else
+                     f"{names.get(c, c)} = {label.lower()}" for floor, label, c in score_bands())
 
 
 def chip(text: str, accent: bool = False) -> str:
@@ -115,15 +145,20 @@ def hero(name: str, chips: Iterable[str], price: str | None = None,
             f'<div class="meta">{meta}</div></div>{price_html}</div>')
 
 
-def cards(items: Iterable[tuple[str, str, str | None, str | None]]) -> str:
-    """Grid of KPI cards; each item is (label, value, sub-text, value colour)."""
+def cards(items: Iterable[tuple]) -> str:
+    """Grid of KPI cards; each item is (label, value, sub-text, value colour[, tooltip]).
+
+    The tooltip (shown on hover, and marked with an "i") explains the metric."""
     parts = []
-    for label, value, sub, color in items:
+    for item in items:
+        label, value, sub, color = item[:4]
+        tip = item[4] if len(item) > 4 else None
         style = f' style="color:{color}"' if color else ""
         sub_html = f'<div class="sub">{escape(sub)}</div>' if sub else ""
-        parts.append(f'<div class="fsa-card"><div class="lbl">{escape(label)}</div>'
-                     f'<div class="val"{style} title="{escape(value)}">{escape(value)}</div>'
-                     f'{sub_html}</div>')
+        tip_attr = f' title="{escape(tip)}"' if tip else ""
+        info = ' <span class="fsa-info">ⓘ</span>' if tip else ""
+        parts.append(f'<div class="fsa-card"{tip_attr}><div class="lbl">{escape(label)}{info}'
+                     f'</div><div class="val"{style}>{escape(value)}</div>{sub_html}</div>')
     return f'<div class="fsa-grid">{"".join(parts)}</div>'
 
 

@@ -13,7 +13,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from app.reporting.ui import ACCENT, DOWN, MUTED, UP, score_color
+from app.reporting.ui import ACCENT, DOWN, MUTED, UP, score_bands, score_color
 
 PALETTE = ["#2962ff", "#26a69a", "#f9a825", "#ab47bc", "#ef5350", "#29b6f6", "#8d6e63",
            "#ec407a"]
@@ -38,22 +38,42 @@ def _style(fig: go.Figure, height: int, legend: bool = True) -> go.Figure:
 
 
 def score_gauge(score: float | None, label: str = "") -> go.Figure:
-    """Speedometer for the 0-100 health score with the five interpretation bands."""
+    """Speedometer for the 0-100 health score. The coloured zones are the configured
+    interpretation bands (universe quartiles), so colour and label always agree.
+
+    A missing score is drawn as an empty, greyed-out dial with the text
+    "N/A - Insufficient applicable financial data" - never as a needle at 0, which
+    would look like a genuine score of zero."""
+    bands = sorted(score_bands(), key=lambda b: b[0])  # lowest band first
+    edges = [b[0] for b in bands] + [100.0]
+    missing = score is None
+    steps = [dict(range=[edges[i], edges[i + 1]],
+                  color="rgba(139,151,168,.12)" if missing else _alpha(bands[i][2], 0.55))
+             for i in range(len(bands))]
     fig = go.Figure(go.Indicator(
-        mode="gauge+number", value=score if score is not None else 0,
-        number=dict(font=dict(size=44), valueformat=".1f",
-                    suffix="" if score is not None else " (N/A)"),
+        mode="gauge" if missing else "gauge+number",
+        value=0 if missing else score,
+        number=dict(font=dict(size=44), valueformat=".1f"),
         title=dict(text=label, font=dict(size=14, color=MUTED)),
         gauge=dict(
-            axis=dict(range=[0, 100], tickwidth=1, tickcolor=MUTED, nticks=6),
-            bar=dict(color="#e6edf3" if score is not None else MUTED, thickness=0.22),
-            bgcolor="rgba(0,0,0,0)", borderwidth=0,
-            steps=[dict(range=[0, 25], color="rgba(239,83,80,.55)"),
-                   dict(range=[25, 40], color="rgba(251,140,0,.5)"),
-                   dict(range=[40, 55], color="rgba(249,168,37,.45)"),
-                   dict(range=[55, 70], color="rgba(102,187,106,.45)"),
-                   dict(range=[70, 100], color="rgba(38,166,154,.55)")])))
+            axis=dict(range=[0, 100], tickwidth=1, tickcolor=MUTED,
+                      tickvals=[0] + [round(e, 1) for e in edges[1:-1]] + [100]),
+            # no bar at all when the score is missing
+            bar=dict(color="rgba(0,0,0,0)" if missing else "#e6edf3",
+                     thickness=0 if missing else 0.22),
+            bgcolor="rgba(0,0,0,0)", borderwidth=0, steps=steps)))
+    if missing:
+        fig.add_annotation(text="N/A<br><span style='font-size:12px'>Insufficient applicable"
+                                "<br>financial data</span>",
+                           x=0.5, y=0.12, xref="paper", yref="paper", showarrow=False,
+                           font=dict(size=26, color=MUTED))
     return _style(fig, 250, legend=False).update_layout(margin=dict(l=25, r=25, t=40, b=0))
+
+
+def _alpha(hex_color: str, alpha: float) -> str:
+    h = hex_color.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r},{g},{b},{alpha})"
 
 
 def category_radar(series: Mapping[str, Mapping[str, float | None]],
@@ -141,7 +161,7 @@ def price_chart(prices: pd.DataFrame, style: str = "Candles", height: int = 430)
 def market_treemap(frame: pd.DataFrame, size: str = "market_cap", color: str = "score",
                    height: int = 560) -> go.Figure:
     """Finviz-style market map: sector -> company boxes, sized by ``size`` and
-    coloured by ``color`` (0-100) in the same five bands as the score gauge; companies
+    coloured by ``color`` (0-100) in the same quartile bands as the score gauge; companies
     without a score (e.g. banks) are grey, never a made-up middle colour."""
     data = frame.dropna(subset=[size]).copy()
     data["sector"] = data["sector"].fillna("Other")

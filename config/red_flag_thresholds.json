@@ -1,6 +1,24 @@
 {
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Thresholds for the explainable red-flag rules (Day 60). A red flag is a potential concern that deserves a closer look, not evidence of fraud or distress. Percentages are expressed in percent (20 = 20%).",
+  "changes": "2.3.0: (1) consecutive-year and year-over-year rules use only the immediately preceding fiscal year (a missing year is never bridged); (2) sector_exclusions added - rules built on operating cash flow, working capital, interest coverage, debt growth or the Altman/Beneish models are NOT_EVALUATED for financial-sector companies. Thresholds unchanged from 2.2.0.",
+  "calibration": {
+    "generated_at": "2026-11-11T14:09:39.754426+00:00",
+    "companies": 835,
+    "report": "docs/calibration/CALIBRATION_REPORT.md"
+  },
+  "sector_exclusions_note": "banks, insurers and other lenders hold deposits and loans as their operating assets and liabilities: their operating cash flow includes deposit and loan flows, they do not classify current assets/liabilities, interest is their cost of funds, borrowing growth is business growth, and the Altman Z and Beneish models were estimated on samples without financial firms. Bank-specific risk measures (NPA ratio, capital adequacy, net interest margin) are outside the Semester 1 scope",
+  "sector_exclusions": {
+    "Financial Services": [
+      "RF01_PROFIT_CASH_DIVERGENCE",
+      "RF02_DEBT_GROWTH",
+      "RF04_NEGATIVE_OPERATING_CASH_FLOW",
+      "RF05_LIQUIDITY_CONCERN",
+      "RF06_WEAK_INTEREST_COVERAGE",
+      "RF08_ALTMAN_DISTRESS",
+      "RF09_BENEISH_MANIPULATION"
+    ]
+  },
   "rules": {
     "RF01_PROFIT_CASH_DIVERGENCE": {
       "enabled": true,
@@ -63,10 +81,5 @@
       "default_severity": "MEDIUM",
       "source": "Beneish (1999) 8-variable M-Score: M > -1.78 resembles manipulators"
     }
-  },
-  "calibration": {
-    "generated_at": "2026-11-11T14:09:39.754426+00:00",
-    "companies": 835,
-    "report": "docs/calibration/CALIBRATION_REPORT.md"
   }
 }

@@ -79,8 +79,13 @@ def year_over_year(metric: str, current_period: date, previous_period: date,
                    current: Decimal | None, previous: Decimal | None) -> TrendOutcome:
     notes = []
     if (current_period - previous_period).days > NON_ADJACENT_DAYS:
-        notes.append(f"Non-adjacent years ({previous_period} -> {current_period}); "
-                     "an intermediate year is missing.")
+        # A change across a missing year is a multi-year change; labelling it
+        # "year-over-year" would overstate one year's movement, so it is not reported.
+        return TrendOutcome(metric, "YOY", current_period, previous_period, current, previous,
+                            None, None, "UNAVAILABLE", TREND_UNAVAILABLE,
+                            f"Non-adjacent years ({previous_period} -> {current_period}): an "
+                            "intermediate fiscal year is missing, so no year-over-year change "
+                            "is reported.")
     if current is None or previous is None:
         which = "current" if current is None else "previous"
         return TrendOutcome(metric, "YOY", current_period, previous_period, current, previous,

@@ -67,6 +67,12 @@ def load_red_flag_config(path: Path) -> dict[str, Any]:
             _number(rule.get(key), f"{path}: {code}.{key}")
         rule.setdefault("enabled", True)
         rule.setdefault("name", code)
+    exclusions = data.get("sector_exclusions", {})
+    if not isinstance(exclusions, dict) or not all(
+            isinstance(codes, list) and set(codes) <= set(rules)
+            for codes in exclusions.values()):
+        raise ConfigError(f"{path}: sector_exclusions must map a sector to a list of "
+                          "existing rule codes")
     data.setdefault("version", "unversioned")
     return data
 

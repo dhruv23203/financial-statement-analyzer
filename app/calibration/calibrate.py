@@ -51,19 +51,39 @@ MIN_WEIGHT_ROWS = 30
 MIN_SUPERVISED_ROWS = 60
 SCORING_VERSION = "2.1.0"
 MIN_SECTOR_OBSERVATIONS = 120  # ~30 companies x 4 years before a sector gets its own curve
-DESCRIPTION = (
-    "Data-calibrated Financial Health Score (python main.py calibrate). Each ratio's "
-    "breakpoints are percentiles (P5-P95) of a reference universe (NIFTY 500 + S&P 500), "
-    "computed within the company's sector when the sector has enough observations (sector-"
-    "relative grading, as used by Tickertape and Seeking Alpha), so points approximate the "
-    "company's percentile rank among its peers (Asness, Frazzini & Pedersen 2019). Ratio weights within a category and category weights are CRITIC "
-    "objective weights (Diakoulaki et al. 1995); a supervised logistic model was tested and "
-    "used only if it passed a pre-declared acceptance rule. Interpretation bands are the "
-    "universe quartiles of the overall score, so labels describe relative position among "
-    "large listed companies. Missing data never receives points; it lowers data coverage. "
-    "Academic indicator only - not a credit rating or investment advice. Full evidence: "
-    "docs/calibration/CALIBRATION_REPORT.md")
-RED_FLAG_VERSION = "2.2.0"
+CATEGORY_METHOD_TEXT = {
+    "CRITIC": "Category weights are CRITIC objective weights (Diakoulaki et al. 1995) of the "
+              "five category scores; a supervised logistic model was tested but did not pass "
+              "the pre-declared acceptance rule.",
+    "SUPERVISED": "Category weights come from a supervised logistic regression of a "
+                  "next-year distress proxy (net loss or negative operating cash flow) on the "
+                  "five category scores: weight = max(0, -coefficient on the raw score scale), "
+                  "normalised to sum to 1, used because it passed a pre-declared acceptance "
+                  "rule (out-of-fold AUC above every simple composite by >= 0.02, AUC CI above "
+                  "0.5, no significantly wrong-signed coefficient). A category whose "
+                  "coefficient is not negative (e.g. liquidity) receives weight 0: it is still "
+                  "shown, graded and checked by red flags but does not move the overall score.",
+}
+
+
+def describe(category_method: str) -> str:
+    """Config description that states the weighting method actually used."""
+    key = "SUPERVISED" if category_method.startswith("SUPERVISED") else "CRITIC"
+    return (
+        "Data-calibrated Financial Health Score (python main.py calibrate). Each ratio's "
+        "breakpoints are percentiles (P5-P95) of a reference universe (NIFTY 500 + S&P 500, "
+        "non-financial companies), computed within the company's sector when the sector has "
+        "enough observations, so points approximate the company's percentile rank among its "
+        "peers (Asness, Frazzini & Pedersen 2019). Ratio weights WITHIN each category are "
+        "CRITIC objective weights (Diakoulaki et al. 1995). " + CATEGORY_METHOD_TEXT[key] +
+        " Interpretation bands are the universe quartiles of the overall score, so labels "
+        "describe relative position among large listed companies. Missing data never "
+        "receives points; it lowers data coverage. Academic indicator only - not a credit "
+        "rating or investment advice. Full evidence: docs/calibration/CALIBRATION_REPORT.md "
+        "and docs/SCORING_METHODOLOGY.md")
+
+
+RED_FLAG_VERSION = "2.3.0"
 
 # Damodaran, A. (January 2026). Ratings, interest coverage ratios and default spreads,
 # large non-financial firms. pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ratings.html
@@ -281,7 +301,7 @@ def calibrate(ctx: AppContext, tickers: list[str], base_scoring: dict[str, Any],
         "(top 10% A, next 20% B, middle 40% C, next 20% D, bottom 10% F); cut-offs are the "
         "universe P90/P70/P30/P10 of each category score.")
     scoring["methodology_version"] = SCORING_VERSION
-    scoring["description"] = DESCRIPTION
+    scoring["description"] = describe(chosen_name)
 
     # 6) red-flag thresholds --------------------------------------------------------
     red_flags, red_flag_evidence = _calibrate_red_flags(companies, base_red_flags)

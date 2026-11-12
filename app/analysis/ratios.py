@@ -40,6 +40,8 @@ NON_POSITIVE_EQUITY = "NON_POSITIVE_EQUITY"
 NO_INTEREST_EXPENSE = "NO_INTEREST_EXPENSE"
 NO_PREVIOUS_BALANCE = "NO_PREVIOUS_BALANCE"
 NON_POSITIVE_NET_INCOME = "NON_POSITIVE_NET_INCOME"
+# A published model whose estimation sample excluded this kind of company.
+MODEL_NOT_APPLICABLE = "MODEL_NOT_APPLICABLE"
 
 # methods
 METHOD_DIRECT = "DIRECT"
@@ -277,10 +279,15 @@ def fallback_note(method: str | None) -> str | None:
     return None
 
 
-def calculate_all_ratios(dataset: FinancialDataset, fallback: str = "ending_balance") -> \
-        list[RatioOutcome]:
-    """Every ratio (Day 30 + Day 40 + cash-flow ratios) for every available period."""
-    from app.analysis.benchmark_scores import calculate_benchmark_scores
+def calculate_all_ratios(dataset: FinancialDataset, fallback: str = "ending_balance",
+                         sector: str | None = None) -> list[RatioOutcome]:
+    """Every ratio (Day 30 + Day 40 + cash-flow ratios) for every available period.
+
+    ``sector`` only switches off benchmark models that do not apply to the sector
+    (see :func:`app.analysis.benchmark_scores.apply_model_applicability`).
+    """
+    from app.analysis.benchmark_scores import (apply_model_applicability,
+                                               calculate_benchmark_scores)
     from app.analysis.valuation import calculate_extra_ratios, calculate_valuation
     from app.analysis.liquidity_solvency import calculate_liquidity_solvency
     from app.analysis.profitability_efficiency import (calculate_cash_flow_ratios,
@@ -295,7 +302,7 @@ def calculate_all_ratios(dataset: FinancialDataset, fallback: str = "ending_bala
         outcomes.extend(calculate_extra_ratios(dataset, period, fallback))
     if dataset.periods and dataset.market:
         outcomes.extend(calculate_valuation(dataset, dataset.periods[-1]))
-    return outcomes
+    return apply_model_applicability(outcomes, sector)
 
 
 def index_outcomes(outcomes: Iterable[RatioOutcome]) -> dict[tuple[str, date], RatioOutcome]:

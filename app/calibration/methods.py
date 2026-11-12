@@ -191,7 +191,13 @@ def supervised_weights(features: np.ndarray, labels: np.ndarray, groups: np.ndar
     if oof_auc < best_candidate + min_auc_gain:
         reasons.append(f"out-of-fold AUC {oof_auc:.3f} does not beat the best simple "
                        f"composite ({best_candidate:.3f}) by {min_auc_gain}")
-    negative = np.clip(-np.array([coefficients[n] for n in names]), 0, None)
+    # The coefficients belong to *standardised* features, but the weights are applied to
+    # raw 0-100 category scores. The raw-scale coefficient is beta_std / sd(feature), so
+    # divide before normalising (otherwise categories with a wider spread are
+    # over-weighted). Positive (wrong-sign but not significant) coefficients get weight 0.
+    sd = X.std(axis=0, ddof=0)
+    raw = np.array([coefficients[n] for n in names]) / np.where(sd > 0, sd, np.inf)
+    negative = np.clip(-raw, 0, None)
     weights = None
     if negative.sum() > 0:
         weights = dict(zip(names, (negative / negative.sum()).round(4).tolist()))

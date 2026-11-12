@@ -433,6 +433,74 @@ def cmd_analyze_universe(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sensitivity(args: argparse.Namespace) -> int:
+    """How much the overall score depends on the category weights (stored scores only)."""
+    import json
+
+    from app.calibration.sensitivity import compare_weightings, default_scenarios
+    from app.services.screener import screen_frame
+
+    ctx = _context(args)
+    config = json.loads(ctx.settings.scoring_config_file.read_text(encoding="utf-8"))
+    results = PROJECT_ROOT / "docs" / "calibration" / "calibration_results.json"
+    critic = None
+    if results.is_file():
+        critic = json.loads(results.read_text(encoding="utf-8"))["category_weights"][
+            "candidates"].get("CRITIC")
+    frame = screen_frame(ctx)
+    if frame.empty:
+        out("No analysed companies. Run: python main.py analyze-universe")
+        return 1
+    frame = frame[frame["sector"] != "Financial Services"]
+    table = compare_weightings(frame, default_scenarios(config, critic),
+                               "shipped (logistic, liquidity 0)",
+                               config["interpretation_bands"])
+    target = Path(args.output)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(target, index=False)
+    out(table.to_string(index=False))
+    out(f"Saved {target}")
+    return 0
+
+
+def cmd_validate_data(args: argparse.Namespace) -> int:
+    """Compare stored figures with official filings (SEC EDGAR and/or a reference CSV)."""
+    from app.validation import reference_check as rc
+
+    ctx = _context(args)
+    references = []
+    if args.csv:
+        references.extend(rc.load_reference_csv(Path(args.csv)))
+    for ticker in args.tickers:
+        try:
+            values, _ = rc.stored_values(ctx, ticker)
+        except AnalyzerError as exc:
+            out(f"{ticker}: {exc}")
+            continue
+        periods = sorted(values)[-args.years:]
+        try:
+            found = rc.sec_reference_values(ticker, periods)
+        except OSError as exc:  # network errors, HTTP errors
+            out(f"{ticker}: SEC EDGAR request failed ({exc}); skipped.")
+            continue
+        if not found:
+            out(f"{ticker}: not found in SEC EDGAR (only US filers are covered).")
+        references.extend(found)
+    if not references:
+        out("Nothing to validate: give US tickers and/or --csv with reference values.")
+        return 1
+    rows = rc.validate(ctx, references)
+    csv_path, md_path = rc.write_report(rows, Path(args.output))
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row.status] = counts.get(row.status, 0) + 1
+    out(f"Validated {len(rows)} values: " + ", ".join(f"{k} {v}" for k, v in
+                                                      sorted(counts.items())))
+    out(f"Report: {md_path}")
+    out(f"Data:   {csv_path}")
+    return 0
+
+
 def cmd_calibrate(args: argparse.Namespace) -> int:
     """Derive scoring breakpoints, weights and red-flag thresholds from a reference universe."""
     import json
@@ -592,6 +660,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--universe", help="path to a universe JSON (default config/reference_universe.json)")
     p.add_argument("--output", default=str(PROJECT_ROOT / "docs" / "calibration"),
                    help="folder for the report and proposed configs")
+    p = add("sensitivity", cmd_sensitivity,
+            "how much the overall score depends on the category weights")
+    p.add_argument("--output", default=str(PROJECT_ROOT / "docs" / "calibration" /
+                                           "weight_sensitivity.csv"))
+    p = add("validate-data", cmd_validate_data,
+            "compare stored figures with official filings (SEC EDGAR / reference CSV)")
+    p.add_argument("tickers", nargs="*", help="US tickers to check against SEC EDGAR")
+    p.add_argument("--csv", help="reference CSV (e.g. values from Indian annual reports)")
+    p.add_argument("--years", type=int, default=2, help="latest N fiscal years per ticker")
+    p.add_argument("--output", default=str(PROJECT_ROOT / "docs" / "validation"))
     p = add("demo", cmd_demo, "offline demonstration with synthetic sample companies")
     p.add_argument("--verbose", action="store_true", help="also print one full analysis")
     return parser

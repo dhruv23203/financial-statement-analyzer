@@ -120,10 +120,11 @@ def analyze_company(ctx: AppContext, raw_ticker: str, write_outputs: bool = True
         run_id = run.id
 
     try:
-        ratios = calculate_all_ratios(dataset, ctx.settings.average_balance_fallback)
+        ratios = calculate_all_ratios(dataset, ctx.settings.average_balance_fallback,
+                                      info["sector"])
         ratio_index = index_outcomes(ratios)
         trends = analyse_trends(dataset)
-        flags = detect_red_flags(dataset, ratio_index, red_flag_config)
+        flags = detect_red_flags(dataset, ratio_index, red_flag_config, info["sector"])
         scores = score_all_periods(dataset.periods, ratio_index, scoring_config,
                                    info["sector"])
         report = AnalysisReport(
@@ -206,6 +207,12 @@ def _summary(report: AnalysisReport) -> dict[str, Any]:
         "red_flags_total": len(report.red_flags.flags),
         "red_flag_severity_counts": report.red_flags.counts(),
         "rules_not_evaluated": len(report.red_flags.not_evaluated()),
+        # Every rule's status for every year (TRIGGERED / NOT_TRIGGERED / NOT_EVALUATED),
+        # so "no flags" can be told apart from "rules could not be checked".
+        "red_flag_status_latest": report.red_flags.status_counts(latest),
+        "red_flag_evaluations": [
+            {"rule": e.rule_code, "period": e.period, "status": e.status, "note": e.note}
+            for e in report.red_flags.evaluations],
         "ratios_calculated": sum(1 for o in report.ratios if o.ok),
         "ratios_total": len(report.ratios),
         "notes": report.notes,

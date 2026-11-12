@@ -23,7 +23,19 @@ RF06 Weak interest coverage  Interest coverage < interest_coverage_threshold. HI
                              high_severity_below.
 RF07 Negative equity         Shareholders' equity < 0 (always HIGH by default).
 
-Rules whose inputs are missing are reported as NOT_EVALUATED (never as "passed").
+Every rule ends in exactly one status per fiscal year:
+    TRIGGERED       the condition was met (a RedFlag is created)
+    NOT_TRIGGERED   all inputs were available and the condition was not met
+    NOT_EVALUATED   the rule could not be checked - inputs missing, no *immediately
+                    preceding* fiscal year (a gap year is never bridged), or the rule is
+                    not applicable to the company's sector (``sector_exclusions``)
+NOT_EVALUATED is never reported as "passed": a company with few triggered flags but
+many unevaluated rules is an *insufficient-data* case, not a clean bill of health.
+
+Consecutive years and year-over-year comparisons use
+:meth:`FinancialDataset.adjacent_previous` (the previous fiscal year only if it ends
+330-400 days earlier). Example: OCF 2022 = -100, 2023 missing, 2024 = -150 is ONE
+negative year at 2024, not two consecutive ones.
 """
 
 from __future__ import annotations
@@ -76,6 +88,14 @@ class RedFlagReport:
     def not_evaluated(self) -> list[RuleEvaluation]:
         return [e for e in self.evaluations if e.status == NOT_EVALUATED]
 
+    def status_counts(self, period: date | None = None) -> dict[str, int]:
+        """Number of rule evaluations per status (optionally for one fiscal year)."""
+        counts = {TRIGGERED: 0, NOT_TRIGGERED: 0, NOT_EVALUATED: 0}
+        for evaluation in self.evaluations:
+            if period is None or evaluation.period == period:
+                counts[evaluation.status] += 1
+        return counts
+
 
 def pct_change(current: Decimal, previous: Decimal) -> Decimal | None:
     """Percentage change, only defined for a positive previous value."""
@@ -89,10 +109,14 @@ def _pct(value: Decimal | None) -> str:
 
 
 class RedFlagEngine:
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any], sector: str | None = None) -> None:
         self.config = config
         self.rules = config["rules"]
         self.report = RedFlagReport()
+        self.sector = sector
+        # Rules that are not applicable to this company's sector (e.g. operating cash
+        # flow of a bank includes deposit and loan flows) - evaluated as NOT_EVALUATED.
+        self.excluded = set((config.get("sector_exclusions") or {}).get(sector or "", []))
 
     # ------------------------------------------------------------------ helpers
     def _enabled(self, code: str) -> bool:
@@ -200,12 +224,14 @@ class RedFlagEngine:
             return self._skip(code, period, "operating cash flow missing")
         if ocf >= 0:
             return self._pass(code, period)
+        # Consecutive = immediately preceding fiscal years only. A missing year (absent
+        # period or missing OCF value) ends the streak; it is never bridged.
         streak, cursor = 0, period
         while cursor is not None and (value := ds.get(cursor, "operating_cash_flow")) \
                 is not None and value < 0:
             streak += 1
-            cursor = ds.previous_period(cursor)
-        previous = ds.previous_period(period)
+            cursor = ds.adjacent_previous(cursor)
+        previous = ds.adjacent_previous(period)
         severe = streak >= int(rule["consecutive_years_for_high"])
         self._flag(code, "HIGH" if severe else rule["default_severity"], period, previous,
                    "Negative operating cash flow",
@@ -227,7 +253,7 @@ class RedFlagEngine:
         threshold = Decimal(str(rule[threshold_key]))
         if outcome.value >= threshold:
             return self._pass(code, period)
-        previous = ds.previous_period(period)
+        previous = ds.adjacent_previous(period)
         previous_outcome = ratios.get((ratio_code, previous)) if previous else None
         severe = outcome.value < Decimal(str(rule["high_severity_below"]))
         self._flag(code, "HIGH" if severe else rule["default_severity"], period, previous,
@@ -248,7 +274,7 @@ class RedFlagEngine:
         triggered = outcome.value < threshold if below else outcome.value > threshold
         if not triggered:
             return self._pass(code, period)
-        previous = ds.previous_period(period)
+        previous = ds.adjacent_previous(period)
         previous_outcome = ratios.get((ratio_code, previous)) if previous else None
         sign = "<" if below else ">"
         self._flag(code, rule["default_severity"], period, previous, title,
@@ -265,7 +291,7 @@ class RedFlagEngine:
             return self._skip(code, period, "shareholders' equity missing")
         if equity >= 0:
             return self._pass(code, period)
-        previous = ds.previous_period(period)
+        previous = ds.adjacent_previous(period)
         self._flag(code, rule["default_severity"], period, previous,
                    "Negative shareholders' equity",
                    f"Shareholders' equity {fmt_number(equity, 0)} < 0",
@@ -278,57 +304,75 @@ class RedFlagEngine:
                     "total_liabilities": ds.get(period, "total_liabilities")})
 
     # ------------------------------------------------------------------ driver
+    def _active(self, code: str, period: date) -> bool:
+        """Enabled and applicable to the sector; records NOT_EVALUATED otherwise."""
+        if not self._enabled(code):
+            return False
+        if code in self.excluded:
+            note = (self.config.get("sector_exclusions_note") or
+                    "rule not designed for this sector")
+            self._skip(code, period, f"not applicable to {self.sector} companies: {note}")
+            return False
+        return True
+
     def run(self, ds: FinancialDataset,
             ratios: dict[tuple[str, date], RatioOutcome]) -> RedFlagReport:
         periods = ds.periods
         for index, period in enumerate(periods):
-            prev = periods[index - 1] if index else None
+            earlier = periods[index - 1] if index else None
+            prev = ds.adjacent_previous(period)
             pairwise = (("RF01_PROFIT_CASH_DIVERGENCE", self.rf01),
                         ("RF02_DEBT_GROWTH", self.rf02),
                         ("RF03_REVENUE_PROFIT_DECLINE", self.rf03))
             for code, rule in pairwise:
-                if not self._enabled(code):
+                if not self._active(code, period):
                     continue
-                if prev is None:
+                if earlier is None:
                     self._skip(code, period, "no previous year to compare with")
+                elif prev is None:
+                    self._skip(code, period, f"previous fiscal year missing (the nearest "
+                                             f"earlier year, {earlier}, is not adjacent; a "
+                                             "gap year is never bridged)")
                 else:
                     rule(ds, period, prev)
-            if self._enabled("RF04_NEGATIVE_OPERATING_CASH_FLOW"):
+            if self._active("RF04_NEGATIVE_OPERATING_CASH_FLOW", period):
                 self.rf04(ds, period)
-            if self._enabled("RF05_LIQUIDITY_CONCERN"):
+            if self._active("RF05_LIQUIDITY_CONCERN", period):
                 self._ratio_rule(
                     "RF05_LIQUIDITY_CONCERN", "current_ratio", "current_ratio_threshold",
                     "Current ratio below threshold",
                     "Current assets may not comfortably cover obligations due within a year.",
                     ratios, ds, period)
-            if self._enabled("RF06_WEAK_INTEREST_COVERAGE"):
+            if self._active("RF06_WEAK_INTEREST_COVERAGE", period):
                 self._ratio_rule(
                     "RF06_WEAK_INTEREST_COVERAGE", "interest_coverage",
                     "interest_coverage_threshold", "Weak interest coverage",
                     "Operating earnings provide little cushion over interest costs.",
                     ratios, ds, period)
-            if self._enabled("RF07_NEGATIVE_EQUITY"):
+            if self._active("RF07_NEGATIVE_EQUITY", period):
                 self.rf07(ds, period)
-            if self._enabled("RF08_ALTMAN_DISTRESS"):
+            if self._active("RF08_ALTMAN_DISTRESS", period):
                 self._score_rule("RF08_ALTMAN_DISTRESS", "altman_z_score", "distress_below",
                                  below=True, ratios=ratios, ds=ds, period=period,
                                  title="Altman Z''-Score in the distress zone",
                                  description="Altman's Z'' model combines working capital, "
                                  "retained earnings, EBIT and book leverage; scores below 1.10 "
                                  "have historically been associated with a high probability "
-                                 "of financial distress (Altman, Hartzell & Peck 1995).")
-            if self._enabled("RF09_BENEISH_MANIPULATION"):
+                                 "of financial distress (Altman, Hartzell & Peck 1995). A "
+                                 "statistical warning sign, not a prediction of default.")
+            if self._active("RF09_BENEISH_MANIPULATION", period):
                 self._score_rule("RF09_BENEISH_MANIPULATION", "beneish_m_score", "threshold",
                                  below=False, ratios=ratios, ds=ds, period=period,
                                  title="Beneish M-Score above the manipulation threshold",
                                  description="The profile of receivables, margins, asset "
                                  "quality, growth, depreciation, SG&A, leverage and accruals "
                                  "resembles companies that manipulated earnings (Beneish 1999). "
-                                 "This is a screening signal with many false positives, not "
-                                 "evidence of manipulation.")
+                                 "This is a screening signal with many false positives (fast "
+                                 "growth or acquisitions also raise it), not evidence of "
+                                 "manipulation or fraud.")
         return self.report
 
 
 def detect_red_flags(ds: FinancialDataset, ratios: dict[tuple[str, date], RatioOutcome],
-                     config: dict[str, Any]) -> RedFlagReport:
-    return RedFlagEngine(config).run(ds, ratios)
+                     config: dict[str, Any], sector: str | None = None) -> RedFlagReport:
+    return RedFlagEngine(config, sector).run(ds, ratios)

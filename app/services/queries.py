@@ -71,6 +71,7 @@ def list_company_summaries(ctx: AppContext) -> list[dict[str, Any]]:
                 "score": summary.get("overall_score"),
                 "interpretation": summary.get("overall_interpretation"),
                 "red_flags": summary.get("red_flags_total"),
+                "analysis_run_id": run.id if run else None,
             })
     return rows
 
