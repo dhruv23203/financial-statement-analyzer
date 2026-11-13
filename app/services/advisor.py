@@ -166,7 +166,7 @@ def _value_row(r: pd.Series, sector_pe: float | None, sector_pb: float | None,
         fair = dcf_fair_value(fcf, growth, rate, term, shares)
         if fair > 0:
             mos = (fair - price) / fair * 100
-            dcf = {"fair_value": fair, "buy_below": fair * (1 - MARGIN_OF_SAFETY),
+            dcf = {"fair_value": fair, "buy_below": fair * (1 - MARGIN_OF_SAFETY), "price": price,
                    "upside": (fair / price - 1) * 100, "margin_of_safety": mos,
                    "growth": growth, "discount_rate": rate, "terminal_growth": term,
                    "base_fcf": fcf}
@@ -234,15 +234,30 @@ def decide(tier: str | None, val: dict[str, Any], currency: str) -> dict[str, An
         key = "TRAP" if label == UNDERVALUED else "AVOID"
     why: list[str] = []
     d = val.get("dcf")
-    if d and key == "BUY" and d["upside"] < -25:
-        key = "BUY_CHECK"
-        why.append(f"Multiples look fair, but the DCF puts the price {abs(d['upside']):.0f}% "
-                   "above fair value - confirm the growth assumptions before buying.")
+    sym = currency_symbol(currency)
+    # The "buy below" price shown to the user is the gate for any buy-type verdict, so the
+    # advice can never say BUY at a price its own DCF calls too high:
+    #   price <= buy below (fair value - margin of safety)  -> BUY
+    #   buy below < price <= fair value                      -> BUY - CHECK THE PRICE
+    #   price > fair value                                   -> WAIT FOR A BETTER PRICE
+    if d and key in ("BUY", "BUY_CHECK"):
+        price = d.get("price") or d["fair_value"] / (1 + d["upside"] / 100)
+        if price > d["fair_value"]:
+            key = "WAIT"
+            premium = (price / d["fair_value"] - 1) * 100
+            why.append(f"The price {sym}{price:,.0f} is {premium:.0f}% above the DCF "
+                       f"fair value {sym}{d['fair_value']:,.0f}, so it is not a buy at this "
+                       "price even though the multiples alone look "
+                       f"{label.lower() if label != NO_DATA else 'acceptable'}.")
+        elif price > d["buy_below"]:
+            key = "BUY_CHECK"
+            why.append(f"The price {sym}{price:,.0f} is below the DCF fair value but above the "
+                       f"buy-below price {sym}{d['buy_below']:,.0f}: the "
+                       f"{MARGIN_OF_SAFETY * 100:.0f}% margin of safety is not there yet.")
     if label != NO_DATA:
         why.append(f"Price looks {label.lower()} (valuation score {val['val_score']:.0f}/100).")
     else:
         why.append("Valuation could not be assessed, so the call rests on quality alone.")
-    sym = currency_symbol(currency)
     if d:
         why.append(f"DCF fair value {sym}{d['fair_value']:,.0f} per share (assumes "
                    f"{d['growth'] * 100:.1f}% growth, {d['discount_rate'] * 100:.0f}% discount rate).")

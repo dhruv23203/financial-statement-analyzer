@@ -52,6 +52,44 @@ def test_decide_without_valuation():
     assert d["decision"] == "BUY_CHECK"
 
 
+def _val(label, price, fair=1000.0):
+    """Valuation dict with a DCF: buy-below = fair value less the margin of safety."""
+    from app.services.advisor import MARGIN_OF_SAFETY
+    dcf = {"fair_value": fair, "buy_below": fair * (1 - MARGIN_OF_SAFETY), "price": price,
+           "upside": (fair / price - 1) * 100, "growth": 0.05, "discount_rate": 0.12}
+    return {"val_label": label, "val_score": 50.0, "dcf": dcf}
+
+
+@pytest.mark.parametrize("price, expected", [
+    (700.0, "BUY"),          # below the buy-below price (800): margin of safety met
+    (800.0, "BUY"),          # exactly at buy-below
+    (900.0, "BUY_CHECK"),    # below fair value but above buy-below
+    (1000.0, "BUY_CHECK"),   # at fair value
+    (1243.0, "WAIT"),        # above fair value (TCS case: ~24% above) - never BUY
+    (2000.0, "WAIT"),
+])
+def test_buy_below_price_gates_buy_verdicts(price, expected):
+    d = decide("high", _val("Fairly valued", price), "INR")
+    assert d["decision"] == expected
+    if expected != "BUY":
+        assert any("buy-below" in w or "above the DCF fair value" in w
+                   for w in d["decision_why"])
+
+
+def test_gate_also_applies_without_multiples():
+    assert decide("high", _val(NO_DATA, 2000.0), "INR")["decision"] == "WAIT"
+    assert decide("high", _val(NO_DATA, 700.0), "INR")["decision"] == "BUY_CHECK"
+
+
+def test_no_buy_above_its_own_buy_below_price(frame):
+    has_dcf = frame[frame["buy_below"].notna() & frame["price"].notna()
+                    & (frame["price_currency"] == frame["currency"])]
+    buys = has_dcf[has_dcf["decision"] == "BUY"]
+    assert (buys["price"] <= buys["buy_below"] + 1e-9).all()
+    assert not has_dcf[(has_dcf["price"] > has_dcf["fair_value"])]["decision"].isin(
+        ["BUY", "BUY_CHECK"]).any()
+
+
 def test_symbol_cleaning():
     assert clean_symbol("INFY-EQ") == "INFY.NS"
     assert clean_symbol("tcs.ns") == "TCS.NS"
