@@ -9,6 +9,21 @@ This repository is the **deployment build** of the project: the Streamlit dashbo
 analysis engine and a slim database with each company's latest stored analysis. Raw
 statement data, run history, tests and documentation live in the full project.
 
+## Advisor and Portfolio Doctor (new tabs)
+* **💡 Advisor** - combines the health score with a valuation (P/E and P/B against sector
+  medians of the same market, PEG, free-cash-flow yield and a 10-year DCF fair value) into
+  one verdict with reasons: BUY / WAIT FOR A BETTER PRICE / RESEARCH / HOLD / DON'T ADD /
+  AVOID. A "buy below" price (fair value less a 20 % margin of safety), a Quality-vs-Value
+  map of the whole universe and a filterable ideas list.
+* **🩺 Portfolio** - upload a broker holdings export (symbol, quantity, average cost; Zerodha /
+  Upstox / Groww / ICICI columns are recognised). Each holding gets an action (ADD / HOLD /
+  TRIM / REVIEW) and the portfolio gets a health score plus alerts for over-concentration,
+  weak and expensive holdings. Nothing is stored.
+
+Both tabs only read what the pipeline already stored (`app/services/advisor.py`,
+`app/services/portfolio_doctor.py`, `app/reporting/advisor_tabs.py`); the existing scoring,
+database and tabs are unchanged. Tests: `python -m pytest tests`.
+
 ## Run on Streamlit Community Cloud
 1. Sign in at https://share.streamlit.io with GitHub.
 2. *Create app* → *Deploy a public app from GitHub*. Pick this repository, branch `main`,

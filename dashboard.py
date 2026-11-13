@@ -21,6 +21,7 @@ from app.analysis.comparison import (amounts_frame, compare_companies, ratios_fr
                                      summary_frame)
 from app.analysis.ratios import RATIO_DEFINITIONS
 from app.reporting import plots, tables, ui
+from app.reporting.advisor_tabs import render_advisor_tab, render_portfolio_tab
 from app.services.context import AppContext, build_context
 from app.services.pipeline import company_history, run_pipeline
 from app.services.screener import (field_descriptions, find_peers, latest_analysis_id,
@@ -249,9 +250,10 @@ if not _tape_frame.empty and "score" in _tape_frame:
                          for t, v in zip(_top["ticker"], _top["score"])],
                         "Top financial health scores"))
 
-tab_company, tab_compare, tab_screen, tab_map, tab_history, tab_db = st.tabs(
+(tab_company, tab_compare, tab_screen, tab_map, tab_history, tab_db, tab_advisor,
+ tab_portfolio) = st.tabs(
     ["📈 Company", "⚖️ Compare", "🔎 Screener", "🗺️ Market map", "🕘 History",
-     "🗄️ Database"])
+     "🗄️ Database", "💡 Advisor", "🩺 Portfolio"])
 
 
 # ---------------------------------------------------------------------------- company tab
@@ -911,5 +913,14 @@ with tab_db:
                                  "Rows": list(health.table_counts.values())}))
     st.subheader("All companies")
     show_table(pd.DataFrame(companies))
+
+# ---------------------------------------------------------------------------- advisor tabs
+# Added on top of the existing dashboard: they only read the stored analyses
+# (see app/services/advisor.py and app/services/portfolio_doctor.py).
+with tab_advisor:
+    render_advisor_tab(ctx, selected, DB_KEY, MARKER, PROVIDER, names)
+
+with tab_portfolio:
+    render_portfolio_tab(ctx, DB_KEY, MARKER, PROVIDER)
 
 html(ui.footer(f"v{scoring_settings(str(ctx.settings.scoring_config_file))['methodology_version']}"))
