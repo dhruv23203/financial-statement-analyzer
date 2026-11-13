@@ -1,4 +1,4 @@
-"""Streamlit rendering for the two investor tabs: Advisor and Portfolio Doctor.
+"""Streamlit rendering for the Quality & Value screen and the Portfolio Doctor tabs.
 
 Kept out of ``dashboard.py`` so the existing tabs stay untouched; the dashboard only
 creates the tabs and calls :func:`render_advisor_tab` / :func:`render_portfolio_tab`.
@@ -28,10 +28,14 @@ TABLE_COLS = ["ticker", "name", "sector", "score", "val_label", "val_score",
               "price_to_earnings", "upside", "headline"]
 TABLE_NAMES = {"ticker": "Ticker", "name": "Company", "sector": "Sector", "score": "Health",
                "val_label": "Valuation", "val_score": "Value score",
-               "price_to_earnings": "P/E", "upside": "Upside to DCF %", "headline": "Verdict"}
+               "price_to_earnings": "P/E", "upside": "Model value vs price %",
+               "headline": "Screening result"}
+DISCLAIMER = ("Descriptive screening results from historical statements and a simple model, "
+              "not buy/sell recommendations. Educational project - not investment advice; "
+              "personalised advice requires a registered adviser (e.g. SEBI RIA in India).")
 
 
-@st.cache_data(show_spinner="Building advisor verdicts ...")
+@st.cache_data(show_spinner="Building the quality & value screen ...")
 def cached_advisor(db_path: str, analysis_marker: int, provider: str, risk: str,
                    _ctx) -> pd.DataFrame:
     """Cached like the dashboard's other reads: any new analysis changes the marker and
@@ -46,8 +50,8 @@ def _html(markup: str) -> None:
 def _verdict_card(headline: str, color: str) -> str:
     return (f'<div style="border-left:6px solid {color};padding:.8rem 1.1rem;border-radius:12px;'
             f'background:{color}14;margin:.4rem 0 .8rem 0">'
-            f'<div style="font-size:.72rem;letter-spacing:.08em;color:#8b97a8">ADVISOR VERDICT</div>'
-            f'<div style="font-size:1.45rem;font-weight:800;color:{color}">{escape(headline)}</div></div>')
+            f'<div style="font-size:.72rem;letter-spacing:.08em;color:#8b97a8">SCREENING RESULT</div>'
+            f'<div style="font-size:1.3rem;font-weight:800;color:{color}">{escape(headline)}</div></div>')
 
 
 def _fmt(v, decimals=1, suffix=""):
@@ -77,16 +81,16 @@ def _table(frame: pd.DataFrame) -> pd.DataFrame:
 # ----------------------------------------------------------------------------- Advisor tab
 def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: int, provider: str,
                        names: dict[str, str]) -> None:
-    _html(ui.section("Investment Advisor",
-                     "Quality (the health score) and price (valuation) combined into one call"))
+    _html(ui.section("Quality & Value screen",
+                     "financial health and valuation side by side - a description, not advice"))
     c1, c2 = st.columns([1, 3])
     risk = c1.selectbox("Investor profile", RISK_PROFILES, index=1, key="advisor_risk",
-                        help="Sets the DCF discount rate and how much of past growth is "
-                             "projected forward.")
+                        help="Model assumptions only: sets the DCF discount rate and how much "
+                             "of past growth is projected forward.")
     frame = cached_advisor(db_key, marker, provider, risk, ctx)
     if frame.empty:
         _html(ui.empty_state("💡", "No analysed companies yet",
-                             "Analyse a ticker from the sidebar to get a verdict."))
+                             "Analyse a ticker from the sidebar to screen it."))
         return
     tickers = list(frame["ticker"])
     default = selected if selected in tickers else tickers[0]
@@ -117,12 +121,13 @@ def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: int, prov
          "Average of the checks below: P/E vs sector, PEG, FCF yield, DCF margin of safety."),
         ("Price", f"{sym}{_fmt(price, 2)}" if price and not pd.isna(price) else "N/A",
          "latest stored snapshot", None, "From the market snapshot saved with the analysis."),
-        ("DCF fair value", f"{sym}{_fmt(row.get('fair_value'), 0)}" if row.get("dcf") else "N/A",
-         f"upside {_fmt(row.get('upside'), 0, '%')}" if row.get("dcf") else "not applicable",
+        ("DCF model value", f"{sym}{_fmt(row.get('fair_value'), 0)}" if row.get("dcf") else "N/A",
+         f"vs price {_fmt(row.get('upside'), 0, '%')}" if row.get("dcf") else "not applicable",
          None, "10-year discounted free cash flow: 5 years at the projected growth, 5 years "
                "fading to long-run growth, then a terminal value."),
-        ("Buy below", f"{sym}{_fmt(row.get('buy_below'), 0)}" if row.get("dcf") else "N/A",
-         "20% margin of safety", None, "Fair value less a 20% margin of safety."),
+        ("Margin-of-safety price", f"{sym}{_fmt(row.get('buy_below'), 0)}" if row.get("dcf") else "N/A",
+         "model value less 20%", None, "DCF model value less a 20% margin of safety - a "
+                                        "reference level, not a price target."),
     ]))
 
     with st.expander("How the valuation score was built", expanded=False):
@@ -152,7 +157,8 @@ def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: int, prov
         fig.add_vline(x=40, line_dash="dot", line_color="#8b97a8")
         st.plotly_chart(fig, width="stretch", config=CHART_CONFIG, key="advisor_map")
 
-    _html(ui.section("Ideas", "Top-quartile health with a buy-type verdict, best first"))
+    _html(ui.section("Screen results", "strong financials with a price at or near model "
+                     "value, best health first"))
     f1, f2 = st.columns([2, 1])
     sectors = sorted(s for s in frame["sector"].dropna().unique())
     sec_pick = f1.multiselect("Sector", sectors, default=[], key="advisor_sectors",
@@ -165,20 +171,20 @@ def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: int, prov
         pool = pool[is_in] if market.startswith("India") else pool[~is_in]
     best = ideas(pool)
     if best.empty:
-        st.caption("No buy-type verdicts in this selection.")
+        st.caption("No company in this selection matches the screen.")
     else:
         st.dataframe(_table(best), hide_index=True, width="stretch")
-    with st.expander("All verdicts (filterable)", expanded=False):
-        keys = st.multiselect("Verdict", list(ACTIONS), default=[], key="advisor_keys",
-                              format_func=lambda k: ACTIONS[k][0], placeholder="All verdicts")
+    with st.expander("All screening results (filterable)", expanded=False):
+        keys = st.multiselect("Screening result", list(ACTIONS), default=[], key="advisor_keys",
+                              format_func=lambda k: ACTIONS[k][0], placeholder="All results")
         view = pool if not keys else pool[pool["decision"].isin(keys)]
         st.dataframe(_table(view.sort_values("score", ascending=False)), hide_index=True,
                      width="stretch")
-        st.download_button("⬇ Download verdicts (CSV)", _table(view).to_csv(index=False),
-                           file_name="advisor_verdicts.csv", mime="text/csv")
-    st.caption("Verdict = health-score band × valuation. A great business at a high price is "
-               "'wait', not 'buy'; a cheap stock with weak financials is a possible value trap. "
-               "Educational - not investment advice.")
+        st.download_button("⬇ Download screen (CSV)", _table(view).to_csv(index=False),
+                           file_name="quality_value_screen.csv", mime="text/csv")
+    st.caption("Screening result = health-score band × valuation. A strong business can still "
+               "be priced above its model value, and a cheap stock with weak financials fits "
+               "the value-trap profile. " + DISCLAIMER)
 
 
 # ----------------------------------------------------------------------------- Portfolio tab
@@ -250,9 +256,10 @@ def render_portfolio_tab(ctx, db_key: str, marker: int, provider: str) -> None:
         _html(ui.flag_card(", ".join(a["tickers"]) or "Portfolio", a["severity"].upper(),
                            a["title"], a["detail"], ""))
 
-    _html(ui.section("What to do with each holding"))
+    _html(ui.section("Holding-by-holding review", "observations, not instructions"))
     show = t[["Symbol", "Company", "Sector", "Weight %", "P&L %", "Health", "Valuation",
-              "Verdict", "Action", "Why"]].round(1)
+              "Verdict", "Action", "Why"]].round(1).rename(
+        columns={"Verdict": "Screening result", "Action": "Observation", "Why": "Reason"})
     st.dataframe(show, hide_index=True, width="stretch",
                  column_config={"Health": st.column_config.ProgressColumn(
                      "Health", min_value=0, max_value=100, format="%d")})
@@ -272,4 +279,4 @@ def render_portfolio_tab(ctx, db_key: str, marker: int, provider: str) -> None:
     st.download_button("⬇ Download portfolio review (CSV)", t.to_csv(index=False),
                        file_name="portfolio_review.csv", mime="text/csv")
     st.caption("Prices are the stored market snapshots (not live). Taxes, goals and time "
-               "horizon are not considered. Educational - not investment advice.")
+               "horizon are not considered. " + DISCLAIMER)

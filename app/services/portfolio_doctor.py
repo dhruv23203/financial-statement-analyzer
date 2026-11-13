@@ -2,9 +2,10 @@
 
 Input: the holdings CSV/Excel a broker exports (Zerodha, Upstox, Groww, ICICI Direct, a
 US broker ...) with at least a symbol, quantity and average-cost column; column names
-are matched loosely. Output: an action per holding (ADD / HOLD / TRIM / REVIEW),
-portfolio-level health and prioritised alerts. Pure functions over the advisor frame;
-nothing is stored. Educational project - not investment advice.
+are matched loosely. Output: a descriptive observation per holding (financial strength,
+valuation, position size), portfolio-level health and prioritised alerts. Pure functions
+over the screen frame; nothing is stored. Observations are not buy/sell instructions -
+educational project, not investment advice.
 """
 
 from __future__ import annotations
@@ -86,22 +87,25 @@ def _action(key: str | None, weight: float) -> tuple[str, str]:
     if key is None:
         return "NO DATA", "Not in the database - analyse it from the sidebar first."
     if key in WEAK_KEYS:
-        return "REVIEW / EXIT", "Weak fundamentals - check whether the reason you bought still holds."
+        return "REVIEW: WEAK FINANCIALS", "Financial health is in the bottom of the universe."
     if weight > MAX_STOCK_PCT:
-        return "TRIM", f"Position is {weight:.0f}% of the portfolio (limit {MAX_STOCK_PCT:.0f}%)."
+        return "REVIEW: LARGE POSITION", (f"Position is {weight:.0f}% of the portfolio "
+                                           f"(concentration limit {MAX_STOCK_PCT:.0f}%).")
     if key in EXPENSIVE_KEYS:
         if weight > 10:
-            return "TRIM", "Expensive for its quality and already a large position."
-        return "HOLD - DON'T ADD", "Price looks high; don't add more now."
+            return "REVIEW: LARGE & HIGH VALUATION", ("Valued above its model value and "
+                                                     "already a large position.")
+        return "HIGH VALUATION", "Price is above the model value for its quality."
     if key in BUY_KEYS:
         if weight < 10:
-            return "ADD", "Strong fundamentals at a reasonable price and a small position."
-        return "HOLD", "Strong holding and already well sized."
+            return "STRONG · SMALL POSITION", ("Strong financials, price at or below model "
+                                              "value, small position.")
+        return "STRONG · WELL SIZED", "Strong financials and a well-sized position."
     if key == "WATCH":
-        return "HOLD - WATCH", "Below-average financial health; don't add until it improves."
+        return "BELOW-AVERAGE FINANCIALS", "Financial health is below the universe median."
     if key == "NODATA":
-        return "HOLD", "No overall health score (e.g. banks are not scored overall); judge on valuation."
-    return "HOLD", "Average fundamentals; keep watching."
+        return "NOT SCORED", "No overall health score (e.g. banks are not scored overall)."
+    return "AVERAGE", "Average financial health and valuation."
 
 
 def analyse_portfolio(holdings: pd.DataFrame, advisor: pd.DataFrame) -> dict[str, Any]:
@@ -174,19 +178,18 @@ def build_alerts(t: pd.DataFrame, sector_w: pd.Series) -> list[dict[str, Any]]:
         sev = "High" if r["Weight %"] >= 5 else "Medium"
         extra = ""
         if pd.notna(r["P&L %"]) and r["P&L %"] < -25:
-            extra = (f" It is also down {abs(r['P&L %']):.0f}% - check whether the business, "
-                     "not just the price, has weakened.")
+            extra = (f" It is also down {abs(r['P&L %']):.0f}% from the average cost.")
         hs = f"health score {r['Health']:.0f}/100" if pd.notna(r["Health"]) else "weak fundamentals"
-        add(sev, f"Weak fundamentals: {r['Company']}",
+        add(sev, f"Weak financial health: {r['Company']}",
             f"{hs}, {r['Weight %']:.1f}% of your portfolio.{extra}", [r["Symbol"]])
     for _, r in t[(t["Valuation"] == "Overvalued") & (t["Weight %"] > 10)
                   & (~t["_key"].isin(WEAK_KEYS))].iterrows():
-        add("Medium", f"Expensive large holding: {r['Company']}",
+        add("Medium", f"Large holding with a high valuation: {r['Company']}",
             f"{r['Weight %']:.0f}% of the portfolio and priced above what its fundamentals "
-            "support. Avoid adding; consider trimming.", [r["Symbol"]])
+            "support (above its model value).", [r["Symbol"]])
     for _, r in t[(t["P&L %"] > 100) & (t["Valuation"] == "Overvalued")].iterrows():
-        add("Low", f"Big gain on an expensive stock: {r['Company']}",
-            f"Up {r['P&L %']:.0f}% and now overvalued - you may want to book part of the profit.",
+        add("Low", f"Large gain, now above model value: {r['Company']}",
+            f"Up {r['P&L %']:.0f}% and now priced above its model value.",
             [r["Symbol"]])
     for _, r in t[t["Weight %"] > MAX_STOCK_PCT].iterrows():
         add("High", f"Over-concentrated: {r['Company']}",

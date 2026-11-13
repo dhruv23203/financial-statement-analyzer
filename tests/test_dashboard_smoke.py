@@ -1,4 +1,4 @@
-"""The dashboard still renders every tab (existing six plus the two advisor tabs)."""
+"""The dashboard still renders every tab (existing six plus the two screening tabs)."""
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -11,5 +11,5 @@ def test_dashboard_renders_all_tabs():
     assert not at.exception, [e.value for e in at.exception]
     labels = [t.label for t in at.tabs]
     for name in ("📈 Company", "⚖️ Compare", "🔎 Screener", "🗺️ Market map", "🕘 History",
-                 "🗄️ Database", "💡 Advisor", "🩺 Portfolio"):
+                 "🗄️ Database", "💡 Quality & Value", "🩺 Portfolio", "📘 Methodology"):
         assert name in labels

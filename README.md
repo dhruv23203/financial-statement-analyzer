@@ -9,16 +9,22 @@ This repository is the **deployment build** of the project: the Streamlit dashbo
 analysis engine and a slim database with each company's latest stored analysis. Raw
 statement data, run history, tests and documentation live in the full project.
 
-## Advisor and Portfolio Doctor (new tabs)
-* **💡 Advisor** - combines the health score with a valuation (P/E and P/B against sector
-  medians of the same market, PEG, free-cash-flow yield and a 10-year DCF fair value) into
-  one verdict with reasons: BUY / WAIT FOR A BETTER PRICE / RESEARCH / HOLD / DON'T ADD /
-  AVOID. A "buy below" price (fair value less a 20 % margin of safety), a Quality-vs-Value
-  map of the whole universe and a filterable ideas list.
+## Quality & Value screen and Portfolio Doctor
+* **💡 Quality & Value** - puts the health score next to a valuation check (P/E and P/B
+  against sector medians of the same market, PEG, free-cash-flow yield and a 10-year DCF
+  model value) and describes the combination, e.g. "Strong financials · price above model
+  value" or "Weak financials · low valuation (value-trap profile)". It shows a
+  margin-of-safety reference price (model value less 20 %), a Quality-vs-Value map of the
+  whole universe and a filterable screen.
 * **🩺 Portfolio** - upload a broker holdings export (symbol, quantity, average cost; Zerodha /
-  Upstox / Groww / ICICI columns are recognised). Each holding gets an action (ADD / HOLD /
-  TRIM / REVIEW) and the portfolio gets a health score plus alerts for over-concentration,
-  weak and expensive holdings. Nothing is stored.
+  Upstox / Groww / ICICI columns are recognised; CSV or Excel). Each holding gets a
+  descriptive observation (financial strength, valuation, position size) and the portfolio
+  gets a health score plus alerts for concentration and weak or highly valued holdings.
+  Nothing is stored.
+
+**These are descriptive screening results, not buy/sell recommendations.** The project is
+educational; giving personalised investment advice to the public requires regulatory
+registration (e.g. SEBI Investment Adviser / Research Analyst in India).
 
 Both tabs only read what the pipeline already stored (`app/services/advisor.py`,
 `app/services/portfolio_doctor.py`, `app/reporting/advisor_tabs.py`); the existing scoring,

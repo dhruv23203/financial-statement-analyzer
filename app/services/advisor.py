@@ -1,17 +1,21 @@
-"""Investment Advisor layer: turns stored analyses into an investor's decision.
+"""Quality & Value screen: combines stored analyses with a valuation check.
 
 The existing pipeline answers "is this a healthy business?" (health score, grades, red
 flags). This module adds the second half of an investment decision, "is the price fair?",
-and combines the two into one verdict with reasons:
+and combines the two into one descriptive screening result with reasons:
 
     quality tier  (health-score interpretation band, adjusted for HIGH red flags)
   + valuation     (P/E and P/B against sector medians, PEG, free-cash-flow yield and a
                    10-year DCF fair value from stored statements and the market snapshot)
-  = decision      (BUY / WAIT / RESEARCH / HOLD / DON'T ADD / AVOID ...)
+  = result        (e.g. "Strong financials - price below model value"; internal keys
+                   BUY / WAIT / ... are kept for the logic but never shown to users)
 
 It only READS what the pipeline already stored (``screen_frame``, analysis-run summaries,
 multi-year trends and market snapshots); nothing here writes to the database or changes
-the existing scoring. Educational project - not investment advice.
+the existing scoring. The results are descriptive screening labels, deliberately not
+buy/sell recommendations: this is an educational project, not investment advice, and
+giving personalised buy/sell advice to the public requires regulatory registration
+(e.g. SEBI Investment Adviser / Research Analyst in India).
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ DCF_ASSUMPTIONS = {
 GROWTH_HAIRCUT = {"conservative": 0.6, "moderate": 0.8, "aggressive": 1.0}
 MAX_GROWTH = 0.15          # never project more than 15 % a year
 DCF_YEARS = 10
-MARGIN_OF_SAFETY = 0.20    # "buy below" = fair value less 20 %
+MARGIN_OF_SAFETY = 0.20    # margin-of-safety price = model value less 20 %
 MIN_SECTOR_PEERS = 5
 
 # Piecewise-linear curves: x = measured value, y = 0..1 (1 = cheapest).
@@ -50,18 +54,19 @@ CURVES = {
 UNDERVALUED, FAIR, OVERVALUED, NO_DATA = "Undervalued", "Fairly valued", "Overvalued", "Not enough data"
 FINANCIAL_SECTORS = ("Financial Services",)
 
-# decision key -> (headline, colour)   (colours follow app/reporting/ui.py)
+# internal decision key -> (descriptive label shown to users, colour)
+# Labels describe what the numbers show; they are not buy/sell instructions.
 ACTIONS = {
-    "BUY": ("BUY / ACCUMULATE", "#26a69a"),
-    "BUY_CHECK": ("BUY - CHECK THE PRICE", "#9ccc65"),
-    "WAIT": ("STRONG BUSINESS - WAIT FOR A BETTER PRICE", "#f9a825"),
-    "RESEARCH": ("CHEAP BUT AVERAGE QUALITY - RESEARCH", "#f9a825"),
-    "HOLD": ("HOLD / WATCHLIST", "#8b97a8"),
-    "NOADD": ("HOLD - DON'T ADD AT THIS PRICE", "#fb8c00"),
-    "WATCH": ("BELOW-AVERAGE QUALITY - WATCH ONLY", "#fb8c00"),
-    "TRAP": ("AVOID - POSSIBLE VALUE TRAP", "#ef5350"),
-    "AVOID": ("AVOID", "#ef5350"),
-    "NODATA": ("INSUFFICIENT DATA", "#8b97a8"),
+    "BUY": ("Strong financials · price below model value", "#26a69a"),
+    "BUY_CHECK": ("Strong financials · valuation not conclusive", "#9ccc65"),
+    "WAIT": ("Strong financials · price above model value", "#f9a825"),
+    "RESEARCH": ("Average financials · low valuation", "#f9a825"),
+    "HOLD": ("Average financials · fair valuation", "#8b97a8"),
+    "NOADD": ("Average financials · high valuation", "#fb8c00"),
+    "WATCH": ("Below-average financials", "#fb8c00"),
+    "TRAP": ("Weak financials · low valuation (value-trap profile)", "#ef5350"),
+    "AVOID": ("Weak financials", "#ef5350"),
+    "NODATA": ("Insufficient data", "#8b97a8"),
 }
 TIER_ORDER = ("high", "mid", "weak", "low")
 
@@ -235,8 +240,8 @@ def decide(tier: str | None, val: dict[str, Any], currency: str) -> dict[str, An
     why: list[str] = []
     d = val.get("dcf")
     sym = currency_symbol(currency)
-    # The "buy below" price shown to the user is the gate for any buy-type verdict, so the
-    # advice can never say BUY at a price its own DCF calls too high:
+    # The margin-of-safety price shown to the user gates the most positive results, so the
+    # screen can never call a stock "below model value" at a price its own DCF calls too high:
     #   price <= buy below (fair value - margin of safety)  -> BUY
     #   buy below < price <= fair value                      -> BUY - CHECK THE PRICE
     #   price > fair value                                   -> WAIT FOR A BETTER PRICE
@@ -245,25 +250,24 @@ def decide(tier: str | None, val: dict[str, Any], currency: str) -> dict[str, An
         if price > d["fair_value"]:
             key = "WAIT"
             premium = (price / d["fair_value"] - 1) * 100
-            why.append(f"The price {sym}{price:,.0f} is {premium:.0f}% above the DCF "
-                       f"fair value {sym}{d['fair_value']:,.0f}, so it is not a buy at this "
-                       "price even though the multiples alone look "
+            why.append(f"The price {sym}{price:,.0f} is {premium:.0f}% above the DCF model "
+                       f"value {sym}{d['fair_value']:,.0f}, although the multiples alone look "
                        f"{label.lower() if label != NO_DATA else 'acceptable'}.")
         elif price > d["buy_below"]:
             key = "BUY_CHECK"
-            why.append(f"The price {sym}{price:,.0f} is below the DCF fair value but above the "
-                       f"buy-below price {sym}{d['buy_below']:,.0f}: the "
-                       f"{MARGIN_OF_SAFETY * 100:.0f}% margin of safety is not there yet.")
+            why.append(f"The price {sym}{price:,.0f} is below the DCF model value but above "
+                       f"the margin-of-safety price {sym}{d['buy_below']:,.0f} (model value less "
+                       f"{MARGIN_OF_SAFETY * 100:.0f}%).")
     if label != NO_DATA:
         why.append(f"Price looks {label.lower()} (valuation score {val['val_score']:.0f}/100).")
     else:
-        why.append("Valuation could not be assessed, so the call rests on quality alone.")
+        why.append("Valuation could not be assessed, so the result rests on quality alone.")
     if d:
-        why.append(f"DCF fair value {sym}{d['fair_value']:,.0f} per share (assumes "
+        why.append(f"DCF model value {sym}{d['fair_value']:,.0f} per share (assumes "
                    f"{d['growth'] * 100:.1f}% growth, {d['discount_rate'] * 100:.0f}% discount rate).")
         if key in ("BUY", "BUY_CHECK", "WAIT", "HOLD", "NOADD"):
-            why.append(f"With a {MARGIN_OF_SAFETY * 100:.0f}% margin of safety, buy below "
-                       f"{sym}{d['buy_below']:,.0f}.")
+            why.append(f"Margin-of-safety price ({MARGIN_OF_SAFETY * 100:.0f}% below model "
+                       f"value): {sym}{d['buy_below']:,.0f}.")
     headline, color = ACTIONS[key]
     return {"decision": key, "headline": headline, "color": color, "decision_why": why}
 
@@ -311,7 +315,8 @@ def advisor_frame(ctx: AppContext, risk: str = "moderate") -> pd.DataFrame:
 
 def ideas(frame: pd.DataFrame, keys: tuple[str, ...] = ("BUY", "BUY_CHECK"),
           limit: int = 25) -> pd.DataFrame:
-    """Best-scored companies with a buy-type decision, for the ideas list."""
+    """Best-scored companies whose result is 'strong financials' with a price at or near
+    model value (internal keys BUY / BUY_CHECK), for the screen list."""
     f = frame[frame["decision"].isin(keys)]
     return f.sort_values(["score", "val_score"], ascending=False).head(limit)
 

@@ -22,6 +22,7 @@ from app.analysis.comparison import (amounts_frame, compare_companies, ratios_fr
 from app.analysis.ratios import RATIO_DEFINITIONS
 from app.reporting import plots, tables, ui
 from app.reporting.advisor_tabs import render_advisor_tab, render_portfolio_tab
+from app.reporting.methodology_tab import render_methodology_tab
 from app.services.context import AppContext, build_context
 from app.services.pipeline import company_history, run_pipeline
 from app.services.screener import (field_descriptions, find_peers, latest_analysis_id,
@@ -96,6 +97,11 @@ def scoring_settings(path: str) -> dict:
     from app.analysis.config_loader import load_scoring_config
 
     return load_scoring_config(Path(path))
+
+
+@st.cache_data(show_spinner=False)
+def red_flag_config(path: str) -> dict:
+    return load_red_flag_config(Path(path))
 
 
 @st.cache_data(show_spinner=False)
@@ -250,10 +256,10 @@ if not _tape_frame.empty and "score" in _tape_frame:
                          for t, v in zip(_top["ticker"], _top["score"])],
                         "Top financial health scores"))
 
-(tab_company, tab_compare, tab_screen, tab_map, tab_history, tab_db, tab_advisor,
- tab_portfolio) = st.tabs(
-    ["📈 Company", "⚖️ Compare", "🔎 Screener", "🗺️ Market map", "🕘 History",
-     "🗄️ Database", "💡 Advisor", "🩺 Portfolio"])
+(tab_company, tab_compare, tab_screen, tab_map, tab_advisor, tab_portfolio, tab_method,
+ tab_history, tab_db) = st.tabs(
+    ["📈 Company", "⚖️ Compare", "🔎 Screener", "🗺️ Market map", "💡 Quality & Value",
+     "🩺 Portfolio", "📘 Methodology", "🕘 History", "🗄️ Database"])
 
 
 # ---------------------------------------------------------------------------- company tab
@@ -922,5 +928,9 @@ with tab_advisor:
 
 with tab_portfolio:
     render_portfolio_tab(ctx, DB_KEY, MARKER, PROVIDER)
+
+with tab_method:
+    render_methodology_tab(scoring_settings(str(ctx.settings.scoring_config_file)),
+                           red_flag_config(str(ctx.settings.red_flag_config_file)))
 
 html(ui.footer(f"v{scoring_settings(str(ctx.settings.scoring_config_file))['methodology_version']}"))

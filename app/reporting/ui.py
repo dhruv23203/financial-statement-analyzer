@@ -166,6 +166,8 @@ h1, h2, h3, h4, h5, [data-testid="stHeading"] * {font-family: var(--fsa-font-dis
   margin-bottom: .9rem; overflow: hidden;}
 .fsa-stats .stat {padding: .65rem .95rem;
   box-shadow: 1px 0 0 var(--fsa-border), 0 1px 0 var(--fsa-border);}
+/* the last cell stretches to the end of its row, so no empty outlined slot remains */
+.fsa-stats .stat:last-child {grid-column-end: -1;}
 .fsa-stats .k {color: var(--fsa-muted); font-size: .7rem; font-weight: 600; letter-spacing: .06em;
   text-transform: uppercase;}
 .fsa-stats .v {font-size: .98rem; font-weight: 700; margin-top: .15rem; font-variant-numeric: tabular-nums;}
@@ -222,6 +224,7 @@ h1, h2, h3, h4, h5, [data-testid="stHeading"] * {font-family: var(--fsa-font-dis
 .fsa-box li {margin-bottom: .35rem; font-size: .88rem; line-height: 1.45;}
 .fsa-box.pros {box-shadow: inset 3px 0 0 #26a69a;}
 .fsa-box.cons {box-shadow: inset 3px 0 0 #ef5350;}
+.fsa-box.plan {box-shadow: inset 3px 0 0 #2962ff;}
 .fsa-flag {padding: .75rem 1rem; border-radius: var(--fsa-radius); margin-bottom: .55rem;
   background: var(--fsa-surface); border: 1px solid var(--fsa-border);}
 .fsa-flag .head {display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; font-weight: 600;}

@@ -72,7 +72,7 @@ def test_buy_below_price_gates_buy_verdicts(price, expected):
     d = decide("high", _val("Fairly valued", price), "INR")
     assert d["decision"] == expected
     if expected != "BUY":
-        assert any("buy-below" in w or "above the DCF fair value" in w
+        assert any("margin-of-safety price" in w or "above the DCF model value" in w
                    for w in d["decision_why"])
 
 
