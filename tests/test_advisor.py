@@ -2,7 +2,7 @@
 import pandas as pd
 import pytest
 
-from app.services.advisor import (ACTIONS, NO_DATA, advisor_frame, dcf_fair_value, decide,
+from app.services.advisor import (ACTIONS, NO_DATA, advisor_frame, decide, peer_median,
                                   quality_tier)
 from app.services.context import build_context
 from app.services.portfolio_doctor import (analyse_portfolio, clean_symbol, parse_holdings,
@@ -31,13 +31,53 @@ def test_top_quartile_overvalued_is_wait_not_buy(frame):
     assert (top["decision"] == "WAIT").all()
 
 
-def test_currency_mismatch_skips_dcf(frame):
+def test_currency_mismatch_keeps_value_but_skips_market_comparison(frame):
+    """Intrinsic value does not need the price; comparing it with a price in another
+    currency would need FX conversion, so only the comparison is dropped."""
     mixed = frame[frame["price_currency"].notna() & (frame["price_currency"] != frame["currency"])]
-    assert mixed["dcf"].isna().all()
+    assert len(mixed) > 0
+    for _, row in mixed.iterrows():
+        assert "dcf_mos" not in row["components"]
+        if isinstance(row["dcf"], dict):
+            assert row["dcf"]["price"] is None and row["dcf"]["margin_of_safety"] is None
 
 
 def test_dcf_monotonic_in_growth():
-    assert dcf_fair_value(100, 0.12, 0.12, 0.04, 10) > dcf_fair_value(100, 0.05, 0.12, 0.04, 10) > 0
+    from app.valuation.dcf import project_cash_flows, value_firm
+
+    def per_share(g):
+        return value_firm(project_cash_flows(100, g, 0.04), 0.12, 0.04, cash=0, debt=0,
+                          shares=10).value_per_share
+    assert per_share(0.12) > per_share(0.05) > per_share(-0.05) > 0
+
+
+def test_peer_median_never_mixes_markets():
+    import numpy as np
+    frame = pd.DataFrame({
+        "_mkt": ["INR"] * 6 + ["USD"] * 6,
+        "sector": ["Tech"] * 5 + ["Energy"] + ["Tech"] * 6,
+        "price_to_earnings": [10, 12, 14, 16, 18, 30, 40, 42, 44, 46, 48, 50]})
+    assert peer_median(frame, "price_to_earnings", "INR", "Tech") == (14, "INR Tech sector")
+    med, basis = peer_median(frame, "price_to_earnings", "INR", "Energy")  # 1 peer only
+    assert basis == "market-wide INR" and med == np.median([10, 12, 14, 16, 18, 30])
+    tiny = frame[frame["_mkt"] == "USD"].head(3)
+    assert peer_median(tiny, "price_to_earnings", "USD", "Tech") == (None, None)
+
+
+def test_missing_price_never_gives_the_most_positive_result():
+    d = decide("high", {"val_label": "Fairly valued", "val_score": 50.0,
+                        "dcf": {"fair_value": 100.0, "buy_below": 80.0, "price": None,
+                                "upside": None, "growth": 0.05, "discount_rate": 0.12}}, "INR")
+    assert d["decision"] == "BUY_CHECK"
+    assert any("cannot be compared" in w for w in d["decision_why"])
+
+
+def test_frame_dcf_uses_fcff_and_bridge(frame):
+    with_dcf = frame[frame["dcf"].notna()]
+    assert len(with_dcf) > 0
+    d = with_dcf.iloc[0]["dcf"]
+    assert d["bridge"]["equity_value"] == pytest.approx(d["equity_value"])
+    assert "not a computed WACC" in d["discount_note"]
 
 
 def test_quality_tier_and_red_flags():
@@ -109,7 +149,10 @@ def test_parse_holdings_missing_column():
 
 
 def test_portfolio_review(frame):
-    out = analyse_portfolio(parse_holdings(sample_holdings(frame)), frame)
+    from datetime import date
+    # evaluate on the snapshot date so the stored prices are fresh whatever today is
+    snapshot_day = date.fromisoformat(frame["price_date"].dropna().max())
+    out = analyse_portfolio(parse_holdings(sample_holdings(frame)), frame, today=snapshot_day)
     assert abs(out["table"]["Weight %"].sum() - 100) < 1e-6
     assert out["summary"]["health"] is not None
     assert all(a["severity"] in ("High", "Medium", "Low") for a in out["alerts"])

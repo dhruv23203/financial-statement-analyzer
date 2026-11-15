@@ -27,21 +27,19 @@ import pandas as pd
 from sqlalchemy import select
 
 from app.database import repositories as repo
-from app.database.models import RUN_SUCCESS, MarketSnapshot, TrendResult
+from app.database.models import RUN_SUCCESS, TrendResult
 from app.services.context import AppContext
 from app.services.screener import screen_frame
+from app.valuation.capm import load_assumptions
+from app.valuation.company import ValuationInputs, load_inputs, screening_valuation
 
 # ----------------------------------------------------------------------------- assumptions
-# Discount rate by investor profile and long-run (terminal) growth, per market.
-DCF_ASSUMPTIONS = {
-    "INR": {"rates": {"conservative": 0.13, "moderate": 0.12, "aggressive": 0.11}, "terminal": 0.05},
-    "other": {"rates": {"conservative": 0.10, "moderate": 0.09, "aggressive": 0.08}, "terminal": 0.03},
-}
-GROWTH_HAIRCUT = {"conservative": 0.6, "moderate": 0.8, "aggressive": 1.0}
-MAX_GROWTH = 0.15          # never project more than 15 % a year
-DCF_YEARS = 10
-MARGIN_OF_SAFETY = 0.20    # margin-of-safety price = model value less 20 %
-MIN_SECTOR_PEERS = 5
+# All valuation assumptions (screening discount rates, growth bounds, margin of safety,
+# valuation-score weights) live in config/valuation_assumptions.json with their sources.
+_CFG = load_assumptions()
+MARGIN_OF_SAFETY = float(_CFG["screening"]["margin_of_safety"])
+SCORE_CFG = _CFG["valuation_score"]
+MIN_SECTOR_PEERS = int(SCORE_CFG["min_sector_peers"])
 
 # Piecewise-linear curves: x = measured value, y = 0..1 (1 = cheapest).
 CURVES = {
@@ -77,19 +75,6 @@ def _curve(name: str, x: float) -> float:
     return float(np.interp(x, xs, ys)) * 100
 
 
-def dcf_fair_value(base_fcf: float, growth: float, rate: float, terminal: float,
-                   shares: float) -> float:
-    """Value per share: 5 years at ``growth``, 5 years fading to ``terminal``, then a
-    terminal value (Gordon growth)."""
-    pv, fcf = 0.0, base_fcf
-    for t in range(1, DCF_YEARS + 1):
-        g = growth if t <= 5 else growth + (terminal - growth) * (t - 5) / 5
-        fcf *= 1 + g
-        pv += fcf / (1 + rate) ** t
-    pv += fcf * (1 + terminal) / (rate - terminal) / (1 + rate) ** DCF_YEARS
-    return pv / shares
-
-
 def _num(v) -> float | None:
     try:
         f = float(v)
@@ -121,7 +106,7 @@ def _extras(ctx: AppContext, tickers: list[str]) -> dict[str, dict[str, Any]]:
                 "high_flags": int((s.get("red_flag_severity_counts") or {}).get("HIGH", 0)),
                 "pros": s.get("pros") or [], "cons": s.get("cons") or [],
                 "revenue_cagr": None, "net_income_cagr": None, "price": None, "shares": None,
-                "price_currency": None,
+                "price_currency": None, "price_date": None,
             }
             runs[run.id] = company.ticker
             snap = repo.latest_market_snapshot(session, company.id)
@@ -129,6 +114,8 @@ def _extras(ctx: AppContext, tickers: list[str]) -> dict[str, dict[str, Any]]:
                 out[company.ticker]["price"] = _num(snap.price)
                 out[company.ticker]["shares"] = _num(snap.shares_outstanding)
                 out[company.ticker]["price_currency"] = snap.currency
+                out[company.ticker]["price_date"] = (snap.fetched_at.date().isoformat()
+                                                     if snap.fetched_at else None)
         ids = list(runs)
         for chunk in (ids[i:i + 500] for i in range(0, len(ids), 500)):
             for t in session.scalars(select(TrendResult).where(
@@ -141,68 +128,100 @@ def _extras(ctx: AppContext, tickers: list[str]) -> dict[str, dict[str, Any]]:
 
 
 # ----------------------------------------------------------------------------- valuation
-def _value_row(r: pd.Series, sector_pe: float | None, sector_pb: float | None,
-               risk: str) -> dict[str, Any]:
+def _value_row(r: pd.Series, peer_pe: tuple[float | None, str | None],
+               peer_pb: tuple[float | None, str | None], risk: str,
+               inputs: ValuationInputs | None) -> dict[str, Any]:
+    """Valuation checks for one company. ``peer_pe`` / ``peer_pb`` are (median, basis)
+    where basis says which peer group was used (or why none was available)."""
     is_fin = r.get("sector") in FINANCIAL_SECTORS
     pe, pb = _num(r.get("price_to_earnings")), _num(r.get("price_to_book"))
-    mcap, price, shares = _num(r.get("market_cap")), _num(r.get("price")), _num(r.get("shares"))
+    mcap = _num(r.get("market_cap"))
     rev, fcf_m = _num(r.get("revenue")), _num(r.get("free_cash_flow_margin"))
-    rev_g, ni_g = _num(r.get("revenue_cagr")), _num(r.get("net_income_cagr"))
+    ni_g = _num(r.get("net_income_cagr"))
     fcf = rev * fcf_m / 100 if (rev is not None and fcf_m is not None) else None
     comps: dict[str, dict[str, Any]] = {}
     notes: list[str] = []
-    # Statements and market data must be in the same currency before they are mixed
-    # (e.g. Infosys reports in USD while its NSE price is in INR).
     pc = r.get("price_currency")
     if isinstance(pc, str) and r.get("currency") and pc != r.get("currency"):
         notes.append(f"Statements are in {r.get('currency')} but the price is in {pc}; "
-                     "DCF and cash-flow yield are skipped.")
+                     "cash-flow yield and the DCF market comparison are skipped (no FX).")
         fcf = None
 
     def add(key, value, text):
-        comps[key] = {"value": round(value, 2), "score": round(_curve(key, value)), "text": text}
+        comps[key] = {"value": round(value, 2), "score": round(_curve(key, value)), "text": text,
+                      "weight": float(SCORE_CFG["weights"].get(key, 0.0))}
 
+    # ---- DCF: FCFF at a disclosed screening discount rate, then the equity bridge
     dcf = None
-    if not is_fin and fcf and fcf > 0 and shares and price and rev_g is not None:
-        market = "INR" if r.get("currency") == "INR" else "other"
-        a = DCF_ASSUMPTIONS[market]
-        rate, term = a["rates"].get(risk, a["rates"]["moderate"]), a["terminal"]
-        growth = float(np.clip(rev_g / 100, 0, MAX_GROWTH)) * GROWTH_HAIRCUT.get(risk, 0.8)
-        fair = dcf_fair_value(fcf, growth, rate, term, shares)
-        if fair > 0:
-            mos = (fair - price) / fair * 100
-            dcf = {"fair_value": fair, "buy_below": fair * (1 - MARGIN_OF_SAFETY), "price": price,
-                   "upside": (fair / price - 1) * 100, "margin_of_safety": mos,
-                   "growth": growth, "discount_rate": rate, "terminal_growth": term,
-                   "base_fcf": fcf}
+    valuation = screening_valuation(inputs, risk) if inputs is not None else None
+    if valuation is not None and valuation.ok:
+        fair = valuation.value_per_share
+        dcf = {"fair_value": fair,
+               "buy_below": fair * (1 - MARGIN_OF_SAFETY) if fair and fair > 0 else None,
+               "price": valuation.price,
+               "upside": valuation.upside * 100 if valuation.upside is not None else None,
+               "margin_of_safety": (valuation.margin_of_safety * 100
+                                    if valuation.margin_of_safety is not None else None),
+               "growth": valuation.growth, "growth_note": valuation.growth_source,
+               "discount_rate": valuation.discount_rate,
+               "discount_note": valuation.discount_note,
+               "terminal_growth": valuation.terminal_growth, "base_fcf": valuation.base_fcff,
+               "fcff_components": valuation.fcff_components,
+               "enterprise_value": valuation.dcf.enterprise_value,
+               "equity_value": valuation.dcf.equity_value, "bridge": valuation.dcf.bridge,
+               "shares": valuation.dcf.shares, "shares_source": valuation.shares_source,
+               "terminal_share": valuation.dcf.terminal_share,
+               "warnings": valuation.warnings}
+        if dcf["margin_of_safety"] is not None and fair > 0:
+            mos = dcf["margin_of_safety"]
             add("dcf_mos", mos, f"Price is {abs(mos):.0f}% {'below' if mos >= 0 else 'above'} "
-                                f"DCF fair value (upside {dcf['upside']:+.0f}%)")
-    elif is_fin:
-        notes.append("DCF is not used for financial companies (cash flow is not meaningful).")
-    elif fcf is not None and fcf <= 0:
-        notes.append("No DCF: free cash flow is negative.")
+                                f"the DCF model value")
+        elif dcf["price"] is None:
+            notes.append("DCF model value calculated, but no current price in the statement "
+                         "currency to compare it with.")
+    elif valuation is not None:
+        notes.append(f"DCF: {valuation.reason}")
 
-    if pe and sector_pe:
-        add("pe_vs_sector", pe / sector_pe, f"P/E {pe:.1f} vs sector median {sector_pe:.1f}")
+    pe_med, pe_basis = peer_pe
+    if pe and pe_med:
+        add("pe_vs_sector", pe / pe_med, f"P/E {pe:.1f} vs {pe_basis} median {pe_med:.1f}")
+        if pe_basis and pe_basis.startswith("market"):
+            notes.append(f"Fewer than {MIN_SECTOR_PEERS} same-market sector peers: P/E compared "
+                         f"with the {pe_basis} median instead (fallback).")
     elif pe is None:
         notes.append("P/E not available (loss-making or no market snapshot).")
-    if is_fin and pb and sector_pb:
-        add("pb_vs_sector", pb / sector_pb, f"P/B {pb:.2f} vs sector median {sector_pb:.2f}")
+    elif pe_med is None:
+        notes.append("Not enough comparable companies in the same market for a P/E comparison.")
+    pb_med, pb_basis = peer_pb
+    if is_fin and pb and pb_med:
+        add("pb_vs_sector", pb / pb_med, f"P/B {pb:.2f} vs {pb_basis} median {pb_med:.2f}")
     peg = pe / ni_g if (pe and ni_g and ni_g > 0) else None
     if peg:
-        add("peg", peg, f"PEG {peg:.2f} (P/E {pe:.1f} / {ni_g:.0f}% profit growth)")
+        add("peg", peg, f"PEG {peg:.2f} (P/E {pe:.1f} / {ni_g:.0f}% profit CAGR)")
     fcf_yield = fcf / mcap * 100 if (fcf is not None and mcap and not is_fin) else None
     if fcf_yield is not None:
         add("fcf_yield", fcf_yield, f"Free-cash-flow yield {fcf_yield:.1f}%")
 
-    if len(comps) >= 2:
-        score = round(float(np.mean([c["score"] for c in comps.values()])), 1)
+    # ---- composite: documented (illustrative) weights over the applicable checks
+    applicable = ["pe_vs_sector", "peg"] + (["pb_vs_sector"] if is_fin
+                                            else ["dcf_mos", "fcf_yield"])
+    weights = SCORE_CFG["weights"]
+    w_applicable = sum(float(weights.get(k, 0)) for k in applicable)
+    w_used = sum(c["weight"] for c in comps.values())
+    coverage = w_used / w_applicable if w_applicable else 0.0
+    if len(comps) >= int(SCORE_CFG["min_components"]) and w_used > 0:
+        score = round(sum(c["score"] * c["weight"] for c in comps.values()) / w_used, 1)
         label = UNDERVALUED if score >= 65 else FAIR if score >= 40 else OVERVALUED
+        if coverage < 0.75:
+            notes.append(f"Only {len(comps)} of {len(applicable)} valuation checks were possible "
+                         f"({coverage:.0%} of the weight): compare this score with care.")
     else:
         score, label = None, NO_DATA
-        notes.append("Fewer than two valuation checks were possible.")
+        notes.append(f"Fewer than {SCORE_CFG['min_components']} valuation checks were possible.")
     return {"val_score": score, "val_label": label, "components": comps, "dcf": dcf,
             "peg": peg, "fcf_yield": fcf_yield, "val_notes": notes,
+            "val_components_used": len(comps), "val_components_applicable": len(applicable),
+            "val_coverage": round(coverage, 3),
             "fair_value": dcf["fair_value"] if dcf else None,
             "buy_below": dcf["buy_below"] if dcf else None,
             "upside": dcf["upside"] if dcf else None}
@@ -245,8 +264,15 @@ def decide(tier: str | None, val: dict[str, Any], currency: str) -> dict[str, An
     #   price <= buy below (fair value - margin of safety)  -> BUY
     #   buy below < price <= fair value                      -> BUY - CHECK THE PRICE
     #   price > fair value                                   -> WAIT FOR A BETTER PRICE
-    if d and key in ("BUY", "BUY_CHECK"):
-        price = d.get("price") or d["fair_value"] / (1 + d["upside"] / 100)
+    if d and key in ("BUY", "BUY_CHECK") and d.get("price") is None:
+        key = "BUY_CHECK"
+        why.append("No current price in the statement currency, so the price cannot be "
+                   "compared with the DCF model value.")
+    elif d and key in ("BUY", "BUY_CHECK") and (d["fair_value"] or 0) <= 0:
+        key = "BUY_CHECK"
+        why.append("The DCF equity value is not positive at these inputs.")
+    elif d and key in ("BUY", "BUY_CHECK"):
+        price = d["price"]
         if price > d["fair_value"]:
             key = "WAIT"
             premium = (price / d["fair_value"] - 1) * 100
@@ -263,9 +289,10 @@ def decide(tier: str | None, val: dict[str, Any], currency: str) -> dict[str, An
     else:
         why.append("Valuation could not be assessed, so the result rests on quality alone.")
     if d:
-        why.append(f"DCF model value {sym}{d['fair_value']:,.0f} per share (assumes "
-                   f"{d['growth'] * 100:.1f}% growth, {d['discount_rate'] * 100:.0f}% discount rate).")
-        if key in ("BUY", "BUY_CHECK", "WAIT", "HOLD", "NOADD"):
+        why.append(f"DCF model value {sym}{d['fair_value']:,.0f} per share (FCFF, "
+                   f"{d['growth'] * 100:+.1f}% growth, {d['discount_rate'] * 100:.0f}% "
+                   "screening discount rate, equity bridge for cash and debt).")
+        if key in ("BUY", "BUY_CHECK", "WAIT", "HOLD", "NOADD") and d.get("buy_below"):
             why.append(f"Margin-of-safety price ({MARGIN_OF_SAFETY * 100:.0f}% below model "
                        f"value): {sym}{d['buy_below']:,.0f}.")
     headline, color = ACTIONS[key]
@@ -273,38 +300,45 @@ def decide(tier: str | None, val: dict[str, Any], currency: str) -> dict[str, An
 
 
 # ----------------------------------------------------------------------------- public
-def advisor_frame(ctx: AppContext, risk: str = "moderate") -> pd.DataFrame:
-    """One row per analysed company with valuation, quality tier and decision.
+def peer_median(frame: pd.DataFrame, column: str, market: str, sector: str | None
+                ) -> tuple[float | None, str | None]:
+    """Peer median with an explicit hierarchy - never mixing markets:
+    1. same market and same sector (at least MIN_SECTOR_PEERS values);
+    2. same market, all sectors (fallback, flagged);
+    3. None when the market itself has too few values."""
+    if column not in frame:
+        return None, None
+    same_market = frame[frame["_mkt"] == market]
+    sector_values = same_market.loc[same_market["sector"] == sector, column].dropna()
+    if sector is not None and len(sector_values) >= MIN_SECTOR_PEERS:
+        return _num(sector_values.median()), f"{market} {sector} sector"
+    market_values = same_market[column].dropna()
+    if len(market_values) >= MIN_SECTOR_PEERS:
+        return _num(market_values.median()), f"market-wide {market}"
+    return None, None
+
+
+def advisor_frame(ctx: AppContext, risk: str = "moderate",
+                  inputs: dict[str, ValuationInputs] | None = None) -> pd.DataFrame:
+    """One row per analysed company with valuation, quality tier and screening result.
 
     Columns include: ticker, name, sector, currency, score, interpretation, high_flags,
-    tier, price_to_earnings, price_to_book, peg, fcf_yield, price, fair_value, buy_below,
-    upside, val_score, val_label, decision, headline, color, why (list of reasons),
-    components (dict), dcf (dict or None)."""
+    tier, price_to_earnings, price_to_book, peg, fcf_yield, price, price_date, fair_value,
+    buy_below, upside, val_score, val_label, val_coverage, decision, headline, color, why
+    (list of reasons), components (dict), dcf (dict or None)."""
     base = screen_frame(ctx)
     if base.empty:
         return base
     extras = _extras(ctx, list(base["ticker"]))
     frame = base.merge(pd.DataFrame.from_dict(extras, orient="index").rename_axis("ticker")
                        .reset_index(), on="ticker", how="left")
-    # sector medians (fall back to the whole universe for small sectors)
-    med_pe_all = frame["price_to_earnings"].median() if "price_to_earnings" in frame else None
-    med_pb_all = frame["price_to_book"].median() if "price_to_book" in frame else None
-    frame["_mkt"] = np.where(frame["currency"] == "INR", "INR", "other")
-    sec_pe = frame.groupby(["_mkt", "sector"])["price_to_earnings"].agg(["median", "count"]) \
-        if "price_to_earnings" in frame else pd.DataFrame()
-    sec_pb = frame.groupby(["_mkt", "sector"])["price_to_book"].agg(["median", "count"]) \
-        if "price_to_book" in frame else pd.DataFrame()
-
-    def sector_median(table, sector, fallback):
-        if sector in table.index and table.loc[sector, "count"] >= MIN_SECTOR_PEERS:
-            return _num(table.loc[sector, "median"])
-        return _num(fallback)
-
+    inputs = inputs if inputs is not None else load_inputs(ctx, list(frame["ticker"]))
+    frame["_mkt"] = np.where(frame["currency"] == "INR", "INR", "USD")
     rows = []
     for _, r in frame.iterrows():
-        key = (r["_mkt"], r.get("sector"))
-        val = _value_row(r, sector_median(sec_pe, key, med_pe_all),
-                         sector_median(sec_pb, key, med_pb_all), risk)
+        val = _value_row(r, peer_median(frame, "price_to_earnings", r["_mkt"], r.get("sector")),
+                         peer_median(frame, "price_to_book", r["_mkt"], r.get("sector")), risk,
+                         inputs.get(r["ticker"]))
         hf = _num(r.get("high_flags")) or 0
         tier, q_why = quality_tier(r.get("interpretation"), int(hf))
         dec = decide(tier, val, r.get("currency"))

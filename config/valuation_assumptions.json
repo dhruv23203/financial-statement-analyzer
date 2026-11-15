@@ -1,0 +1,66 @@
+{
+  "version": "1.0.0",
+  "description": "Market assumptions for the CAPM / WACC / DCF valuation engine (app/valuation). Every value has a source and an as-of date; update them before relying on a valuation. Educational project - not investment advice.",
+  "markets": {
+    "INR": {
+      "risk_free_rate": 0.072,
+      "risk_free_source": "India 10-year government bond yield, approx. 7.20% on 11 Nov 2026 (Trading Economics, India 10Y yield news)",
+      "equity_risk_premium": 0.0708,
+      "equity_risk_premium_source": "Damodaran, Country Default Spreads and Risk Premiums, updated 5 Jan 2026: India total ERP 7.08% (mature-market 4.23% + country risk premium 2.85%)",
+      "benchmark_index": "^NSEI",
+      "benchmark_name": "NIFTY 50",
+      "statutory_tax_rate": 0.2517,
+      "statutory_tax_source": "India corporate tax under section 115BAA: 22% + 10% surcharge + 4% cess = 25.17%",
+      "terminal_growth": 0.05,
+      "terminal_growth_note": "Long-run nominal growth assumption for INR cash flows (project assumption, below the INR risk-free rate)"
+    },
+    "USD": {
+      "risk_free_rate": 0.0485,
+      "risk_free_source": "US 10-year Treasury yield, approx. 4.85% on 9-10 Nov 2026 (Trading Economics / YCharts daily close 6 Nov 2026: 4.86%)",
+      "equity_risk_premium": 0.0446,
+      "equity_risk_premium_source": "Damodaran, Country Default Spreads and Risk Premiums, updated 5 Jan 2026: United States total ERP 4.46% (mature-market 4.23% + country risk premium 0.23%)",
+      "benchmark_index": "^GSPC",
+      "benchmark_name": "S&P 500",
+      "statutory_tax_rate": 0.21,
+      "statutory_tax_source": "US federal corporate income tax rate 21% (state taxes excluded)",
+      "terminal_growth": 0.03,
+      "terminal_growth_note": "Long-run nominal growth assumption for USD cash flows (project assumption, below the USD risk-free rate)"
+    }
+  },
+  "as_of": "2026-11-15",
+  "beta": {
+    "method": "OLS slope of monthly total-price returns of the stock on the market benchmark",
+    "period": "5y",
+    "interval": "1mo",
+    "min_observations": 36,
+    "note": "Raw (unadjusted) regression beta; the Blume-adjusted beta (0.67 x raw + 0.33) is shown for reference only."
+  },
+  "forecast": {
+    "explicit_years": 5,
+    "fade_years": 5,
+    "min_growth": -0.10,
+    "max_growth": 0.15,
+    "growth_note": "Explicit-period growth = historical revenue CAGR, bounded to [-10%, +15%]; negative history is kept negative. Years 6-10 fade linearly to the terminal growth rate."
+  },
+  "cost_of_debt": {
+    "method": "interest expense / average total debt (pre-tax), accepted when between the risk-free rate and risk-free + 10 percentage points; otherwise the debt weight is used with the risk-free rate + 2% and a warning",
+    "max_spread": 0.10,
+    "fallback_spread": 0.02
+  },
+  "screening": {
+    "description": "The universe-wide screen uses fixed screening discount rates instead of a computed WACC (no beta for every company). They are disclosed as screening assumptions, not WACC.",
+    "discount_rates": {
+      "INR": {"conservative": 0.13, "moderate": 0.12, "aggressive": 0.11},
+      "USD": {"conservative": 0.10, "moderate": 0.09, "aggressive": 0.08}
+    },
+    "growth_haircut": {"conservative": 0.6, "moderate": 0.8, "aggressive": 1.0},
+    "margin_of_safety": 0.20
+  },
+  "valuation_score": {
+    "status": "ILLUSTRATIVE",
+    "note": "Composite of available valuation checks. Weights are a documented project choice (equal), not statistically validated; the result is an illustrative composite score, not a validated valuation rating.",
+    "weights": {"dcf_mos": 1.0, "pe_vs_sector": 1.0, "pb_vs_sector": 1.0, "peg": 1.0, "fcf_yield": 1.0},
+    "min_components": 2,
+    "min_sector_peers": 5
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "status": "ILLUSTRATIVE PROJECT ASSUMPTIONS",
+  "note": "These thresholds are project-defined, illustrative assumptions for flagging concentration - they are not universal financial rules, regulatory limits or advice. Change them here; the dashboard and tests read this file.",
+  "max_stock_pct": 25.0,
+  "max_sector_pct": 40.0,
+  "min_holdings": 5,
+  "position_spread_target": 8,
+  "position_spread_note": "Position Spread Score = min(100, effective number of positions / target x 100), where effective number = 1 / sum(weight^2) (inverse Herfindahl-Hirschman index). It measures how evenly money is spread across positions only - not sector diversification and not return correlations.",
+  "composite_weights": {"health": 0.7, "position_spread": 0.3},
+  "min_analysed_coverage": 0.7,
+  "coverage_note": "The composite portfolio score is shown only when at least this share of the priced portfolio value has a financial-health score; otherwise it is labelled a partial assessment.",
+  "price_max_age_days": 5,
+  "price_max_age_note": "A price older than this (calendar days, covering weekends and short holidays) is stale and is not used as a current market price.",
+  "price_disagreement_pct": 5.0
+}

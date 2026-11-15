@@ -22,6 +22,12 @@ statement data, run history, tests and documentation live in the full project.
   gets a health score plus alerts for concentration and weak or highly valued holdings.
   Nothing is stored.
 
+Valuation: FCFF discounted at a disclosed screening rate for the universe, and at a
+CAPM/WACC (live beta) for the selected company, with the enterprise-to-equity bridge. Portfolio:
+fresh prices only (never cost as price), one currency at a time, coverage and position spread
+reported. Methodology: docs/VALUATION_METHODOLOGY.md and docs/PORTFOLIO_METHODOLOGY.md in the
+project.
+
 **These are descriptive screening results, not buy/sell recommendations.** The project is
 educational; giving personalised investment advice to the public requires regulatory
 registration (e.g. SEBI Investment Adviser / Research Analyst in India).
