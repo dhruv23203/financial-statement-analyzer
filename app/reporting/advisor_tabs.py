@@ -13,7 +13,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from app.reporting import plots, ui
+from app.reporting import plots, ui, valuation_view
 from app.services.advisor import ACTIONS, NO_DATA, advisor_frame, company_row, ideas
 from app.services.advisor import currency_symbol
 from app.valuation import capm
@@ -142,6 +142,21 @@ def cached_beta(provider: str, ticker: str, benchmark: str, _ctx) -> dict | None
         return {"error": str(exc)}
     except Exception as exc:  # noqa: BLE001 - network or provider failure, shown to the user
         return {"error": f"Price download failed: {exc}"}
+
+
+@st.cache_data(show_spinner=False)
+def cached_history(db_path: str, marker: str, provider: str, ticker: str, _ctx):
+    """FCFF history stored with the latest analysis (all fiscal years)."""
+    from app.database import repositories as repo
+
+    with _ctx.db.session_scope() as session:
+        company = repo.get_company(session, ticker)
+        run = repo.latest_analysis_run(session, company.id) if company else None
+        return ((run.summary or {}).get("fcff_history") if run else None) or None
+
+
+def _scale(currency: str | None) -> tuple[float, str]:
+    return (1e7, f"{currency} crore") if currency == "INR" else (1e6, f"{currency} million")
 
 
 @st.cache_data(show_spinner=False)
@@ -525,25 +540,20 @@ def render_full_valuation(ctx, provider: str, db_key: str, marker: str, ticker: 
                   market["terminal_growth_note"])]
     st.dataframe(pd.DataFrame(rows, columns=["Input", "Value", "Source / formula"]),
                  hide_index=True, width="stretch")
+    history = cached_history(db_key, marker, provider, ticker, ctx)
+    scale = _scale(inputs.currency)
     if not v.ok:
         st.info(f"Full valuation N/A: {v.reason}")
         screen = screening_valuation(inputs)
         if screen.ok:
+            st.markdown("**Screening DCF instead** (fixed screening discount rate, not a WACC)")
+            valuation_view.render(screen, market, sym, inputs.currency, history, scale)
             render_valuation_research(screen, sym, inputs.currency,
                                       "screening DCF (fixed screening discount rate, not WACC)")
+        elif history:
+            valuation_view.render_history_only(history, scale)
         return
-    _html(ui.cards([
-        ("Enterprise value", ui.compact_number(v.dcf.enterprise_value, inputs.currency),
-         "PV of FCFF + terminal", None),
-        ("Equity value", ui.compact_number(v.dcf.equity_value, inputs.currency),
-         "after cash, debt, minority", None),
-        ("Intrinsic value / share", f"{sym}{v.value_per_share:,.2f}", v.shares_source, None),
-        ("Price vs value", f"{v.upside:+.0%}" if v.upside is not None else "N/A",
-         (f"value / stored price {sym}{v.price:,.2f} ({inputs.price_date or 'date n/a'}) - 1"
-          if v.upside is not None else "no price in this currency"), None),
-    ]))
-    for warning in v.warnings:
-        st.caption(f"⚠ {warning}")
+    valuation_view.render(v, market, sym, inputs.currency, history, scale)
     st.caption("Market inputs (risk-free rate, equity risk premium, tax) are dated in "
                "config/valuation_assumptions.json; beta uses live Yahoo Finance prices. "
                + DISCLAIMER)
@@ -567,8 +577,10 @@ def render_valuation_research(v, sym: str, currency: str | None, basis: str) -> 
         st.dataframe(shown.map(lambda x: f"{sym}{x:,.0f}" if x is not None and pd.notna(x)
                                else "N/A"), width="stretch")
         st.caption("Each cell re-runs the same DCF with only the discount rate and terminal "
-                   "growth changed. N/A = rate not above terminal growth (Gordon model "
-                   "undefined).")
+                   "growth changed (values at the same date as the headline value). N/A = the "
+                   "rate is not above terminal growth (Gordon model undefined), or terminal "
+                   f"growth is at or above the risk-free rate ({v.risk_free:.2%}), which is "
+                   "not economically reasonable for a perpetuity.")
     st.markdown("**Scenarios** (assumption sets, not forecasts or probabilities)")
     cases = scen.scenarios(v)
     if cases:
@@ -580,8 +592,9 @@ def render_valuation_research(v, sym: str, currency: str | None, basis: str) -> 
             "vs price": f"{c.vs_price:+.0%}" if c.vs_price is not None else "N/A"}
             for c in cases]), hide_index=True, width="stretch")
         st.caption("Bear: growth -3 pts, rate +1 pt, terminal -1 pt. Bull: growth +3 pts, "
-                   "rate -1 pt, terminal +0.5 pt. Growth stays inside the forecast bounds. "
-                   "Defined in config/valuation_assumptions.json.")
+                   "rate -1 pt, terminal +0.5 pt. Growth stays inside the forecast bounds and "
+                   "terminal growth stays below the risk-free rate. Defined in "
+                   "config/valuation_assumptions.json.")
     st.markdown("**Reverse DCF: what growth does the current price imply?**")
     rd = scen.reverse_dcf(v)
     if rd.implied_growth is not None:

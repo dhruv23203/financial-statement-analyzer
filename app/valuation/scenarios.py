@@ -53,12 +53,17 @@ def revalue(v: CompanyValuation, growth: float | None = None, rate: float | None
     g = v.growth if growth is None else growth
     r = v.discount_rate if rate is None else rate
     tg = v.terminal_growth if terminal is None else terminal
+    if v.risk_free is not None and tg >= v.risk_free:
+        return None            # perpetual growth at or above the risk-free rate: not reasonable
     try:
         flows = project_cash_flows(v.base_fcff, g, tg, cfg["explicit_years"], cfg["fade_years"])
         out = value_firm(flows, r, tg, **_bridge_args(v)).value_per_share
     except ValuationError:
         return None
-    return out if out is not None and math.isfinite(out) else None
+    if out is None or not math.isfinite(out):
+        return None
+    # same date as the base valuation: rolled to the price date at this scenario's rate
+    return out * (1 + r) ** v.roll_years if v.roll_years else out
 
 
 def sensitivity_grid(v: CompanyValuation, rate_steps=(-0.02, -0.01, 0.0, 0.01, 0.02),
@@ -96,6 +101,8 @@ def scenarios(v: CompanyValuation, definitions: dict[str, dict[str, float]] | No
     for name, d in defs.items():
         g = min(max(v.growth + d["growth_delta"], lo), hi)
         r, tg = v.discount_rate + d["rate_delta"], v.terminal_growth + d["terminal_delta"]
+        if v.risk_free is not None and tg >= v.risk_free:
+            tg = v.risk_free - 0.0025     # keep perpetual growth below the risk-free rate
         value = revalue(v, growth=g, rate=r, terminal=tg)
         vs = (value / v.price - 1) if (value is not None and v.price) else None
         out.append(Scenario(name, g, r, tg, value, vs))

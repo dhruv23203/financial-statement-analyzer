@@ -59,6 +59,7 @@ INPUT_METRICS = ("total_revenue", "operating_cash_flow", "capital_expenditure",
                  "cash_and_equivalents", "cash_and_short_term_investments",
                  "minority_interest", "diluted_average_shares", "ordinary_shares_number",
                  "stockholders_equity", "ebit", "operating_income", "interest_income",
+                 "pretax_income", "tax_provision",
                  "reconciled_depreciation",
                  "depreciation_amortization_cf", "change_in_working_capital")
 # Where interest paid sits in the cash-flow statement, by reporting currency (proxy for
@@ -118,10 +119,33 @@ class CompanyValuation:
     upside: float | None = None
     wacc_detail: Any = None
     warnings: list[str] = field(default_factory=list)
+    # dates: the DCF is computed at the balance-sheet date (valuation_date); when a dated
+    # price exists the value is rolled forward to the price date at the discount rate
+    # (value_per_share), so value and price refer to the same day.
+    valuation_date: date | None = None
+    price_date: str | None = None
+    roll_years: float = 0.0
+    value_per_share_at_valuation_date: float | None = None
+    risk_free: float | None = None
+    assumption_flags: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
         return self.status == "OK"
+
+    @property
+    def terminal_share(self) -> float | None:
+        """Present value of the terminal value as a share of enterprise value."""
+        if self.dcf is None or not self.dcf.enterprise_value:
+            return None
+        return self.dcf.pv_terminal_value / self.dcf.enterprise_value
+
+    @property
+    def net_debt(self) -> float | None:
+        b = (self.dcf.bridge if self.dcf else None) or {}
+        if b.get("minus_debt") is None or b.get("plus_cash") is None:
+            return None
+        return b["minus_debt"] - b["plus_cash"]
 
 
 # ----------------------------------------------------------------------------- loading
@@ -132,15 +156,17 @@ def load_inputs(ctx: AppContext, tickers: list[str] | None = None) -> dict[str, 
     wanted = set(tickers) if tickers else None
     with ctx.db.session_scope() as session:
         run_to_ticker: dict[int, str] = {}
+        runs = repo.latest_analysis_runs(session)                # batched: one query each
+        snaps = repo.latest_market_snapshots(session)
         for company in repo.list_companies(session):
             if wanted is not None and company.ticker not in wanted:
                 continue
-            run = repo.latest_analysis_run(session, company.id)
+            run = runs.get(company.id)
             if run is None:
                 continue
             item = ValuationInputs(company.ticker, run.currency or company.currency,
                                    company.sector, {})
-            snap = repo.latest_market_snapshot(session, company.id)
+            snap = snaps.get(company.id)
             if snap is not None and snap.status == RUN_SUCCESS:
                 item.price = float(snap.price) if snap.price is not None else None
                 item.market_cap = float(snap.market_cap) if snap.market_cap is not None else None
@@ -386,6 +412,11 @@ def _value(inputs: ValuationInputs, rate: float, method: str, rate_note: str,
             growth *= a["screening"]["growth_haircut"].get(risk, 0.8) if growth > 0 else 1.0
             growth_note += f", {risk} haircut on positive growth"
         terminal = market["terminal_growth"]
+        if terminal >= market["risk_free_rate"]:
+            raise ValuationError(
+                f"Terminal growth {terminal:.2%} must be below the risk-free rate "
+                f"{market['risk_free_rate']:.2%}: no business can grow faster than the "
+                "economy's risk-free nominal rate forever (economically unreasonable).")
         flows = project_cash_flows(base, growth, terminal, cfg["explicit_years"],
                                    cfg["fade_years"])
         share_sel = select_share_count(inputs)
@@ -396,17 +427,31 @@ def _value(inputs: ValuationInputs, rate: float, method: str, rate_note: str,
                             debt=latest.get("total_debt"), shares=shares,
                             minority_interest=latest.get("minority_interest"))
     except ValuationError as exc:
-        return CompanyValuation("INVALID" if "must be greater" in str(exc)
-                                else "INSUFFICIENT_DATA", str(exc), method)
+        invalid = "must be greater" in str(exc) or "must be below" in str(exc)
+        return CompanyValuation("INVALID" if invalid else "INSUFFICIENT_DATA", str(exc), method)
     out = CompanyValuation("OK", None, method, result, base, parts, growth, growth_note, rate,
                            rate_note, terminal, shares_src, result.value_per_share,
                            warnings=warnings + g_warn + result.warnings,
                            wacc_detail=wacc_detail)
     out.fcff_components["share_count"] = {k: share_sel[k] for k in
                                           ("shares", "source", "as_of", "classification")}
+    out.valuation_date = inputs.latest_period
+    out.value_per_share_at_valuation_date = result.value_per_share
+    out.risk_free = market["risk_free_rate"]
+    out.price_date = inputs.price_date
+    out.assumption_flags = assumption_flags(out, inputs.latest, market)
     # Market comparison is optional: intrinsic value does not need the price.
     if inputs.price is not None and inputs.price_currency == inputs.currency:
         out.price = inputs.price
+        out.roll_years = roll_forward_years(inputs.latest_period, inputs.price_date)
+        if out.roll_years and result.value_per_share is not None:
+            # value at the price date = value at the balance-sheet date grown at the
+            # discount rate for the elapsed time (time value of the same cash flows)
+            out.value_per_share = result.value_per_share * (1 + rate) ** out.roll_years
+        if out.roll_years > 1.25:
+            out.assumption_flags.append(
+                f"The latest statements end {out.roll_years:.1f} years before the price date: "
+                "the valuation rests on old figures.")
         out.margin_of_safety = margin_of_safety(out.value_per_share, inputs.price)
         if out.value_per_share and inputs.price:
             out.upside = out.value_per_share / inputs.price - 1
@@ -415,6 +460,119 @@ def _value(inputs: ValuationInputs, rate: float, method: str, rate_note: str,
                             f"{inputs.currency}: market comparison not shown (no FX "
                             "conversion).")
     return out
+
+
+def roll_forward_years(valuation_date: date | None, price_date: str | None) -> float:
+    """Years from the balance-sheet date to the price date, clamped to [0, 2]; 0 when
+    either date is unknown (then no roll-forward is applied)."""
+    if valuation_date is None or not price_date:
+        return 0.0
+    try:
+        pd_ = date.fromisoformat(str(price_date)[:10])
+    except ValueError:
+        return 0.0
+    return max(0.0, min(2.0, (pd_ - valuation_date).days / 365.25))
+
+
+def _short(x: float) -> str:
+    """Readable amount in the statement currency (e.g. 41.5 bn)."""
+    a = abs(x)
+    for div, unit in ((1e12, "tn"), (1e9, "bn"), (1e6, "mn")):
+        if a >= div:
+            return f"{x / div:,.1f} {unit}"
+    return f"{x:,.0f}"
+
+
+TV_SHARE_LIMIT = 0.75
+MIN_SPREAD = 0.02          # discount rate - terminal growth below 2 points: very sensitive
+
+
+def assumption_flags(v: CompanyValuation, latest: dict[str, float],
+                     market: dict[str, Any]) -> list[str]:
+    """Warnings for assumptions that are unrealistic or make the value fragile."""
+    flags: list[str] = []
+    share = v.terminal_share
+    if share is not None and share > TV_SHARE_LIMIT:
+        flags.append(f"The terminal value is {share:.0%} of enterprise value (above "
+                     f"{TV_SHARE_LIMIT:.0%}): most of the value lies beyond the forecast, "
+                     "so it depends heavily on terminal growth and the discount rate.")
+    if v.discount_rate is not None and v.terminal_growth is not None and \
+            v.discount_rate - v.terminal_growth < MIN_SPREAD:
+        flags.append(f"Discount rate {v.discount_rate:.1%} is less than "
+                     f"{MIN_SPREAD:.0%} above terminal growth {v.terminal_growth:.1%}: small "
+                     "changes in either move the value a lot.")
+    if v.discount_rate is not None and v.discount_rate < market["risk_free_rate"]:
+        flags.append(f"Discount rate {v.discount_rate:.1%} is below the risk-free rate "
+                     f"{market['risk_free_rate']:.1%}: equity and debt holders are being "
+                     "paid less than a government bond.")
+    if v.discount_rate is not None and v.discount_rate > 0.20:
+        flags.append(f"Discount rate {v.discount_rate:.1%} is above 20 % (very high beta or "
+                     "cost of debt): check the inputs.")
+    capex, da = _finite(latest.get("capital_expenditure")), \
+        _finite(latest.get("reconciled_depreciation"))
+    if da is None:
+        da = _finite(latest.get("depreciation_amortization_cf"))
+    if v.growth and v.growth > 0.03 and capex is not None and da and abs(capex) < abs(da):
+        flags.append(f"Capital expenditure ({_short(abs(capex))}) is below depreciation "
+                     f"({_short(abs(da))}) while {v.growth:.1%} growth is projected: growth "
+                     "normally needs net investment, so the cash flows may be too high.")
+    rev = _finite(latest.get("total_revenue"))
+    if v.base_fcff is not None and rev and rev > 0 and v.base_fcff / rev > 0.40:
+        flags.append(f"Base FCFF is {v.base_fcff / rev:.0%} of revenue - unusually high; "
+                     "check for one-off working-capital inflows.")
+    return flags
+
+
+def fcff_history(periods: dict[date, dict[str, float]], tax_rate: float,
+                 currency: str | None) -> list[dict[str, Any]]:
+    """FCFF of every fiscal year with the same method as the DCF base year, plus the
+    drivers (revenue, operating margin, capex, D&A, working capital, effective tax).
+    A year whose inputs are missing is kept with FCFF None and the reason."""
+    rows = []
+    for period in sorted(periods):
+        v = periods[period]
+        rev, op = _finite(v.get("total_revenue")), _finite(v.get("operating_income"))
+        pretax, tax = _finite(v.get("pretax_income")), _finite(v.get("tax_provision"))
+        row: dict[str, Any] = {
+            "period": period.isoformat(), "revenue": rev, "operating_income": op,
+            "operating_margin": (op / rev * 100) if (op is not None and rev and rev > 0)
+            else None,
+            "operating_cash_flow": _finite(v.get("operating_cash_flow")),
+            "capital_expenditure": None if v.get("capital_expenditure") is None
+            else -abs(float(v["capital_expenditure"])),
+            "effective_tax_rate": (tax / pretax * 100) if (tax is not None and pretax and
+                                                           pretax > 0) else None}
+        try:
+            fcff, parts, _ = fcff_base(v, tax_rate, currency)
+            row.update(fcff=fcff, method=parts.get("method"), reason=None)
+        except ValuationError as exc:
+            row.update(fcff=None, method=None, reason=str(exc))
+        rows.append(row)
+    return rows
+
+
+def history_flags(history: list[dict[str, Any]], base_fcff: float | None,
+                  statutory_tax: float) -> list[str]:
+    """Checks that need several years: an unusual base year, peak margins and a tax
+    rate far from the statutory one."""
+    flags: list[str] = []
+    fcffs = [r["fcff"] for r in history if r.get("fcff") is not None]
+    if base_fcff is not None and len(fcffs) >= 3:
+        avg = sum(fcffs) / len(fcffs)
+        if avg > 0 and abs(base_fcff / avg - 1) > 0.40:
+            flags.append(f"The base-year FCFF differs by {base_fcff / avg - 1:+.0%} from the "
+                         f"{len(fcffs)}-year average ({_short(avg)}): the base year may not be "
+                         "representative.")
+    margins = [r["operating_margin"] for r in history if r.get("operating_margin") is not None]
+    if len(margins) >= 3 and margins[-1] - sum(margins[:-1]) / len(margins[:-1]) > 5:
+        flags.append(f"The latest operating margin ({margins[-1]:.1f} %) is more than 5 points "
+                     "above its earlier average: the forecast capitalises a possibly "
+                     "peak margin.")
+    taxes = [r["effective_tax_rate"] for r in history if r.get("effective_tax_rate") is not None]
+    if taxes and abs(taxes[-1] - statutory_tax * 100) > 10:
+        flags.append(f"The effective tax rate ({taxes[-1]:.1f} %) differs by more than 10 "
+                     f"points from the statutory {statutory_tax:.1%} used in FCFF.")
+    return flags
 
 
 def screening_valuation(inputs: ValuationInputs, risk: str = "moderate") -> CompanyValuation:

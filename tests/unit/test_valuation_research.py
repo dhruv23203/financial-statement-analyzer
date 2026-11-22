@@ -38,7 +38,12 @@ def test_sensitivity_grid_centre_is_base_and_invalid_cells_are_na():
     # higher discount rate -> lower value; higher terminal growth -> higher value
     col = grid[round(v.terminal_growth, 4)]
     assert col.is_monotonic_decreasing
-    assert grid.loc[round(v.discount_rate, 4)].is_monotonic_increasing
+    row = grid.loc[round(v.discount_rate, 4)]
+    assert row.dropna().astype(float).is_monotonic_increasing
+    # INR risk-free rate 5.33 %: terminal growth of 5.5 % and 6 % is not economically
+    # reasonable for a perpetuity, so those cells are N/A rather than a number
+    assert all(row[g] is None or pd.isna(row[g]) for g in row.index if g >= v.risk_free)
+    assert all(pd.notna(row[g]) for g in row.index if g < v.risk_free)
     # a rate at or below terminal growth must be N/A, never a number
     tight = scen.sensitivity_grid(v, rate_steps=(-(v.discount_rate - v.terminal_growth),),
                                   terminal_steps=(0.0,))
