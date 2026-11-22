@@ -128,7 +128,8 @@ def render_methodology_tab(scoring: dict[str, Any], red_flags: dict[str, Any]) -
 
     render_health_framework()
 
-    st.markdown(ui.section("Red-flag rules", f"thresholds v{red_flags.get('version', '?')}"),
+    st.markdown(ui.section("Red-flag rules", f"thresholds v{red_flags.get('version', '?')}",
+                           kind="risk"),
                 unsafe_allow_html=True)
     st.dataframe(rule_table(red_flags), hide_index=True, width="stretch")
     excluded = red_flags.get("sector_exclusions") or {}
@@ -140,9 +141,11 @@ def render_methodology_tab(scoring: dict[str, Any], red_flags: dict[str, Any]) -
     render_valuation_method()
     render_portfolio_method()
 
-    st.markdown(ui.section("Data and limitations"), unsafe_allow_html=True)
+    st.markdown(ui.section("Data and limitations", kind="data"), unsafe_allow_html=True)
     for item in LIMITATIONS:
         st.markdown(f"- {item}")
+    from app.reporting.overview_tab import render_glossary
+    render_glossary("methodology")
     st.caption("Full documentation in the project repository: docs/HEALTH_SCORE_FRAMEWORK.md, "
                "docs/RED_FLAG_METHODOLOGY.md, docs/FINANCIAL_FORMULAS.md, "
                "docs/DATA_VALIDATION.md, docs/AUDIT_REPORT.md.")
@@ -181,7 +184,7 @@ def render_health_framework() -> None:
     from app.analysis.health_framework import load_framework
 
     cfg = load_framework()
-    st.markdown(ui.section("Financial Health Score", f"methodology v{cfg['version']} - "
+    st.markdown(ui.section("Financial Health Score", kind="health", hint=f"methodology v{cfg['version']} - "
                                                      "industry frameworks"),
                 unsafe_allow_html=True)
     bands = ", ".join(f"{b['label'].title()} >= {b['min']}" for b in
@@ -286,7 +289,7 @@ def render_validation_evidence() -> None:
 
 def render_valuation_method() -> None:
     a = load_assumptions()
-    st.markdown(ui.section("Valuation (Quality & Value tab)",
+    st.markdown(ui.section("Valuation (Quality & Value tab)", kind="valuation", hint=
                            "FCFF discounted at WACC, then the equity bridge"), unsafe_allow_html=True)
     st.markdown(
         "1. **FCFF** = EBIT x (1 - tax rate) + D&A - capital expenditure + change in working "

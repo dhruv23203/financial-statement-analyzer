@@ -22,7 +22,7 @@ from app.analysis.comparison import (amounts_frame, compare_companies, period_la
                                      ratios_frame, summary_frame)
 from app.analysis.ratios import RATIO_DEFINITIONS
 from app.analysis.health_framework import load_framework
-from app.reporting import health_view, ml_tab, plots, tables, ui
+from app.reporting import glossary, health_view, ml_tab, overview_tab, plots, tables, ui
 from app.reporting.advisor_tabs import render_advisor_tab, render_portfolio_tab
 from app.reporting.methodology_tab import render_methodology_tab
 from app.database.validation import validate_database
@@ -129,7 +129,7 @@ def cached_quarterly(provider: str, ticker: str) -> tuple[pd.DataFrame, str | No
         return pd.DataFrame(), f"Quarterly statements unavailable: {exc}"
 
 
-@st.cache_data(max_entries=64, show_spinner=False)
+@st.cache_data(max_entries=64, show_spinner="Loading the company's analysis ...")
 def cached_analysis(provider: str, db_path: str, ticker: str, marker: str) -> StoredAnalysis:
     """Stored analysis per company. cache_data (not cache_resource) returns a copy to
     every session, so one user's session can never mutate another user's object."""
@@ -309,10 +309,14 @@ if not _tape_frame.empty and "score" in _tape_frame:
                          for t, v in zip(_top["ticker"], _top["score"])],
                         "Top financial health scores"))
 
-(tab_company, tab_compare, tab_screen, tab_map, tab_advisor, tab_portfolio, tab_ml,
- tab_method, tab_history, tab_db) = st.tabs(
-    ["📈 Company", "⚖️ Compare", "🔎 Screener", "🗺️ Market map", "💡 Quality & Value",
-     "🩺 Portfolio", "🤖 ML prediction", "📘 Methodology", "🕘 History", "🗄️ Database"])
+(tab_overview, tab_company, tab_compare, tab_screen, tab_map, tab_advisor, tab_portfolio,
+ tab_ml, tab_method, tab_history, tab_db) = st.tabs(
+    ["🏠 Overview", "📈 Company", "⚖️ Compare", "🔎 Screener", "🗺️ Market map",
+     "💡 Quality & Value", "🩺 Portfolio", "🤖 ML prediction", "📘 Methodology", "🕘 History",
+     "🗄️ Database"])
+
+with tab_overview:
+    overview_tab.render(companies, selected)
 
 
 # ---------------------------------------------------------------------------- company tab
@@ -471,7 +475,8 @@ def render_key_numbers(analysis: StoredAnalysis) -> None:
     for code, label in KEY_RATIOS:
         value, sub = text(code)
         items.append((label, value, sub, None, METRIC_HELP[label]))
-    html(ui.section("Key numbers", "latest fiscal year · tap a card for its formula"))
+    html(ui.section("Key numbers", "latest fiscal year · tap a card for its formula",
+                    kind="profitability", anchor="sec-numbers"))
     html(ui.cards(items))
     if market:
         st.caption(f"Latest fiscal year: {analysis.latest_period:%d %b %Y}. Market multiples "
@@ -625,6 +630,45 @@ def render_data_status(ticker: str) -> None:
                    "are listed, never filled in.")
 
 
+STATEMENT_LABELS = {"income_statement": "Income statement", "balance_sheet": "Balance sheet",
+                    "cash_flow": "Cash flow"}
+
+
+def render_statements(analysis: StoredAnalysis) -> None:
+    """The standardised annual statements, line by line (as stored)."""
+    factor, unit = scale_for(analysis.currency)
+    kind = st.segmented_control("Statement", list(STATEMENT_LABELS),
+                                format_func=STATEMENT_LABELS.get, default="income_statement",
+                                key="statement_kind", label_visibility="collapsed") \
+        or "income_statement"
+    frame = tables.statement_frame(analysis.dataset, kind, factor)
+    if frame.empty:
+        st.info("No lines of this statement are stored for this company.")
+        return
+    show_table(frame)
+    st.caption(f"{unit}; fiscal years as reported (columns = fiscal year-ends). '–' = not "
+               "reported for that year - never filled in. The hosted demo keeps only the "
+               "lines the analysis needs; the full statements are in the development "
+               "database and in the CSV exports of 'python main.py clean'.")
+
+
+def render_flag_summary(analysis: StoredAnalysis) -> None:
+    """Severity counts for the latest year, and what a red flag is."""
+    latest = [f for f in analysis.flags if f.period == analysis.latest_period]
+    counts = {sev: sum(1 for f in latest if f.severity == sev) for sev in ("HIGH", "MEDIUM",
+                                                                          "LOW")}
+    html(ui.glance([
+        ("Latest year", tables.fy_label(analysis.latest_period)
+         if analysis.latest_period else "n/a", None),
+        ("High", str(counts["HIGH"]), ui.DOWN if counts["HIGH"] else None),
+        ("Medium", str(counts["MEDIUM"]), None),
+        ("Low", str(counts["LOW"]), None),
+        ("All years", str(len(analysis.flags)), None)]))
+    st.caption(glossary.explain("Red flag") + " Each card shows the rule, the numbers that "
+               "triggered it and why it matters; banks are exempt from rules built on "
+               "working capital or operating cash flow.")
+
+
 def render_company(analysis: StoredAnalysis) -> None:
     check = analysis.currency_check
     live = PROVIDER == "yfinance"
@@ -634,6 +678,10 @@ def render_company(analysis: StoredAnalysis) -> None:
     prices = (cached_prices(PROVIDER, analysis.ticker, PRICE_RANGES[range_label]) if live
               else pd.DataFrame())
     render_header(analysis, prices, range_label)
+    html(ui.page_nav([("Health", "sec-health"), ("Key numbers", "sec-numbers"),
+                      ("Strengths & weaknesses", "sec-pros"),
+                      ("Statements & ratios", "sec-financials"),
+                      ("Red flags", "sec-flags")]))
     render_data_status(analysis.ticker)
     if check.get("status") in ("FAILED", "OVERRIDDEN"):
         (st.error if check["status"] == "FAILED" else st.info)(check.get("message", ""))
@@ -651,14 +699,15 @@ def render_company(analysis: StoredAnalysis) -> None:
 
     render_glance(analysis)
     html(ui.section("Financial health", "industry framework, five pillars, every point "
-                                        "explained"))
+                                        "explained", kind="health", anchor="sec-health"))
     render_scorecard(analysis)
     health_view.render(analysis)
     render_key_numbers(analysis)
 
     pros, cons = analysis.summary.get("pros") or [], analysis.summary.get("cons") or []
     if pros or cons:
-        html(ui.section("Strengths & weaknesses", "generated by explicit rules"))
+        html(ui.section("Strengths & weaknesses", "generated by explicit rules",
+                        kind="health", anchor="sec-pros"))
         p_col, c_col = st.columns(2)
         with p_col:
             html(ui.bullet_box("✅ Pros", pros, "pros"))
@@ -667,9 +716,14 @@ def render_company(analysis: StoredAnalysis) -> None:
         st.caption("Generated by explicit rules from the numbers below (peer percentiles, "
                    "trends, red flags, published scores).")
 
-    html(ui.section("Financials", f"amounts in {scale_for(analysis.currency)[1]}"))
-    t_fin, t_q, t_ratio, t_score, t_trend = st.tabs(
-        ["Key financials", "Quarterly & TTM", "Ratios", "Score history", "Trends"])
+    html(ui.section("Financial statements & ratios",
+                    f"amounts in {scale_for(analysis.currency)[1]}", kind="growth",
+                    anchor="sec-financials"))
+    t_fin, t_stmt, t_q, t_ratio, t_score, t_trend = st.tabs(
+        ["Key financials", "Statements", "Quarterly & TTM", "Ratios", "Score history",
+         "Trends"])
+    with t_stmt:
+        render_statements(analysis)
     with t_q:
         render_quarterly(analysis)
     with t_fin:
@@ -712,8 +766,9 @@ def render_company(analysis: StoredAnalysis) -> None:
             show_table(tables.trend_frame(analysis.trends, analysis.currency))
 
     html(ui.section(f"Red flags · {len(analysis.flags)} triggered (all years)",
-                    "potential concerns, not proof of fraud or distress"))
-    st.caption("Potential concerns that deserve a closer look - not proof of fraud or distress.")
+                    "potential concerns, not proof of fraud or distress", kind="risk",
+                    anchor="sec-flags"))
+    render_flag_summary(analysis)
     render_flag_status(analysis)
     recent = [f for f in analysis.flags if f.period == analysis.latest_period]
     older = [f for f in analysis.flags if f.period != analysis.latest_period]
@@ -754,7 +809,17 @@ with tab_company:
 
 # ---------------------------------------------------------------------------- compare tab
 with tab_compare:
-    html(ui.section("Compare companies", "side-by-side ratios, scores and snowflakes"))
+    html(ui.section("Compare companies", "side-by-side ratios, scores and snowflakes",
+                    kind="health"))
+    with st.expander("How to read this page"):
+        st.markdown(
+            "- Pick 2-5 companies, or a peer group, or 'Find peers' (same industry, similar "
+            "revenue, same currency first).\n"
+            "- **Ratios** compare across currencies; **absolute amounts** never do (no FX "
+            "conversion).\n"
+            "- Companies with different fiscal year-ends are flagged *misaligned*: use "
+            "'Specific fiscal year' to align them; the radar then uses the same years.\n"
+            "- Rank 1 = best for that ratio (lower is better for debt ratios).")
     st.caption(f"Choose 2-{MAX_COMPARISON_COMPANIES} analysed companies. Ratios are compared "
                "across currencies; absolute amounts never are.")
     groups = {"(custom)": []} | {k: v for k, v in PEER_GROUPS.items()}
@@ -826,7 +891,7 @@ with tab_compare:
                 chart(plots.ranked_bars(scores, "Overall health score", height=380,
                                         score_colors=True), key="cmp_scores")
         show_table(summary_frame(report))
-        html(ui.section("Ratios (rank in brackets)"))
+        html(ui.section("Ratios (rank in brackets)", kind="profitability"))
         show_table(ratios_frame(report))
         ratio_pick = st.selectbox("Chart a ratio", list(COMPARISON_RATIOS),
                                   format_func=lambda c: RATIO_DEFINITIONS[c].name)
@@ -837,7 +902,7 @@ with tab_compare:
                   key="cmp_ratio")
         else:
             st.caption("No company in this comparison has a value for this ratio.")
-        html(ui.section("Absolute amounts (own currency, millions)"))
+        html(ui.section("Absolute amounts (own currency, millions)", kind="data"))
         show_table(amounts_frame(report))
 
 
@@ -851,7 +916,7 @@ SCREEN_COLUMNS = {
 }
 
 with tab_screen:
-    html(ui.section("Stock screener", "filter all analysed companies"))
+    html(ui.section("Stock screener", "filter all analysed companies", kind="data"))
     st.caption("Filter every analysed company with conditions joined by AND. Short names: "
                "roe, roa, roce, npm, de, pe, pb, cr, qr, piotroski, altman, beneish; text fields: "
                "sector, industry, currency. Missing values never pass a condition.")
@@ -912,7 +977,7 @@ with tab_map:
     if frame.empty:
         st.info("No analysed companies yet.")
     else:
-        html(ui.section("Market map", "every company, grouped by sector"))
+        html(ui.section("Market map", "every company, grouped by sector", kind="data"))
         markets = {"India (INR)": "INR", "United States (USD)": "USD", "All": None}
         m1, m2, m3 = st.columns(3)
         market_pick = m1.selectbox("Market", list(markets))
@@ -966,7 +1031,7 @@ with tab_map:
 
 # ---------------------------------------------------------------------------- history tab
 with tab_history:
-    html(ui.section("Run history"))
+    html(ui.section("Run history", kind="data"))
     if selected is None:
         st.info("No company selected.")
     else:
@@ -983,7 +1048,7 @@ with tab_history:
 MAX_DOWNLOAD_MB = 250  # larger files: use the server-side copy or the CLI
 
 with tab_db:
-    html(ui.section("Database"))
+    html(ui.section("Database", kind="data"))
     db_file = ctx.settings.db_path
     size_mb = db_file.stat().st_size / 1_048_576 if db_file.exists() else 0.0
     st.caption(f"SQLite file `{db_file.name}` · {size_mb:,.1f} MB · schema revision "
@@ -1119,4 +1184,4 @@ with tab_method:
     render_methodology_tab(scoring_settings(str(ctx.settings.scoring_config_file)),
                            red_flag_config(str(ctx.settings.red_flag_config_file)))
 
-html(ui.footer(f"v{scoring_settings(str(ctx.settings.scoring_config_file))['methodology_version']}"))
+html(ui.footer(f"v{load_framework()['version']}"))   # Health Score 3.0 framework

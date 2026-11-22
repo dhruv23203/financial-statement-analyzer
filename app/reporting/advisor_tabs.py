@@ -172,6 +172,19 @@ def _table(frame: pd.DataFrame) -> pd.DataFrame:
 # ----------------------------------------------------------------------------- Advisor tab
 def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: str, provider: str,
                        names: dict[str, str]) -> None:
+    with st.expander("How to read this page"):
+        st.markdown(
+            "- **Screening result** = financial-health band x valuation; it describes the "
+            "numbers, it is not a buy/sell instruction.\n"
+            "- **Valuation score** combines P/E and P/B against same-market sector peers, PEG, "
+            "free-cash-flow yield and a DCF margin of safety; negative multiples are N/M and "
+            "never count as cheap.\n"
+            "- **Full valuation** discounts free cash flow to the firm (FCFF) at a WACC built "
+            "from CAPM. Below it: the valuation date and price date, the assumptions and why, "
+            "warnings, the cash-flow history, a sensitivity table, bear/base/bull scenarios "
+            "and a reverse DCF.\n"
+            "- A DCF is only as good as its assumptions: read the terminal-value share and "
+            "the warnings before the headline value.")
     _html(ui.section("Quality & Value screen",
                      "financial health and valuation side by side - a description, not advice"))
     c1, c2 = st.columns([1, 3])
@@ -333,7 +346,18 @@ def _money(cur: str, v) -> str:
 
 
 def render_portfolio_tab(ctx, db_key: str, marker: str, provider: str) -> None:
-    _html(ui.section("Portfolio Doctor", "upload a broker holdings file; nothing is stored"))
+    _html(ui.section("Portfolio Doctor", "upload a broker holdings file; nothing is stored",
+                     kind="risk"))
+    with st.expander("How to read this page"):
+        st.markdown(
+            "- Upload the holdings CSV/Excel from your broker (symbol, quantity, average "
+            "cost); every rejected row is listed with the reason.\n"
+            "- Prices must be fresh and dated; average cost is never used as a price, so an "
+            "unpriced holding shows N/A.\n"
+            "- Weights cover **priced holdings only** - the denominator is stated.\n"
+            "- Each currency is reviewed separately (no FX conversion).\n"
+            "- Alerts are observations on concentration and financial health, not "
+            "instructions.")
     st.warning("Privacy: before uploading, remove account numbers, client IDs, names, PAN "
                "and any other personal details from the file. Only symbol, quantity, average "
                "cost (and optionally last price) are needed. The file is processed in memory "
@@ -447,7 +471,7 @@ def render_portfolio_tab(ctx, db_key: str, marker: str, provider: str) -> None:
              "is reported separately from position spread."),
         ]))
 
-    _html(ui.section("Alerts", "what to look at first"))
+    _html(ui.section("Alerts", "what to look at first", kind="risk"))
     if not out["alerts"]:
         st.success("No alerts: position sizes, sectors and fundamentals are within the "
                    "illustrative limits.")
@@ -503,7 +527,8 @@ def render_portfolio_tab(ctx, db_key: str, marker: str, provider: str) -> None:
 def render_full_valuation(ctx, provider: str, db_key: str, marker: str, ticker: str, row,
                           sym: str) -> None:
     """FCFF discounted at a CAPM/WACC for one company, with every input and source shown."""
-    _html(ui.section("Full valuation: CAPM / WACC",
+    _html(ui.section("Full valuation: CAPM / WACC", kind="valuation",
+                     hint=
                      "FCFF discounted at WACC, then the equity bridge - inputs and sources below"))
     inputs = cached_inputs(db_key, marker, provider, ticker, ctx)
     if inputs is None:
@@ -563,7 +588,8 @@ def render_full_valuation(ctx, provider: str, db_key: str, marker: str, ticker: 
 def render_valuation_research(v, sym: str, currency: str | None, basis: str) -> None:
     """Sensitivity grid, bear/base/bull and reverse DCF for one valuation (same engine,
     same base FCFF, bridge and share count - only the named inputs change)."""
-    _html(ui.section("Valuation research", f"how much the answer depends on the inputs - "
+    _html(ui.section("Valuation research", kind="valuation", hint=f"how much the answer "
+                     f"depends on the inputs - "
                                            f"{basis}"))
     st.markdown("**Sensitivity: value per share by discount rate and terminal growth**")
     grid = scen.sensitivity_grid(v)

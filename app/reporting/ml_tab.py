@@ -104,7 +104,7 @@ def render_prediction(pred: dm.Prediction, model: dict[str, Any], ticker: str) -
 
 
 def render(analysis, ticker: str | None) -> None:
-    _html(ui.section("ML prediction: distress onset (experimental)",
+    _html(ui.section("ML prediction: distress onset (experimental)", kind="risk", hint=
                      "a statistical model - separate from the rule-based Financial Health "
                      "Score"))
     st.warning("This is a **machine-learning model trained on historical outcomes**, not "
@@ -121,7 +121,7 @@ def render(analysis, ticker: str | None) -> None:
     else:
         st.caption("Select an analysed company in the sidebar to see its prediction.")
 
-    _html(ui.section("Model evaluation", "untouched test year, next to baselines"))
+    _html(ui.section("Model evaluation", "untouched test year, next to baselines", kind="data"))
     split = report["split"]
     st.caption(
         f"Chronological split by the outcome year - train: outcomes "
@@ -156,6 +156,6 @@ def render(analysis, ticker: str | None) -> None:
                              f"{dm.FEATURES.get(d['correlated_with'], d['correlated_with'])}, "
                              f"{d['spearman']})" for d in report["features_dropped"]))
 
-    _html(ui.section("Limitations"))
+    _html(ui.section("Limitations", kind="data"))
     for item in LIMITATIONS:
         st.markdown(f"- {item}")

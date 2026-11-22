@@ -183,3 +183,24 @@ def legend() -> str:
 
 def fmt_score(score: Decimal | None) -> str:
     return "N/A" if score is None else fmt_number(score, 1)
+
+
+def statement_frame(dataset, statement_type: str, factor: float) -> pd.DataFrame:
+    """One standardised statement as a table: rows = line items in the catalogue order,
+    columns = fiscal years (oldest first), values divided by *factor* (e.g. crore or
+    million) with thousands separators. A line that is missing in a year shows '–'
+    (never 0); lines missing in every year are left out."""
+    from config.metric_aliases import METRIC_DEFINITIONS
+
+    periods = list(dataset.periods)
+    rows = []
+    for d in METRIC_DEFINITIONS:
+        if d.statement != statement_type:
+            continue
+        values = [dataset.get(p, d.code) for p in periods]
+        if all(v is None for v in values):
+            continue
+        rows.append({"Line item": d.name, **{
+            fy_label(p): "–" if v is None else f"{float(v) / factor:,.1f}"
+            for p, v in zip(periods, values)}})
+    return pd.DataFrame(rows)

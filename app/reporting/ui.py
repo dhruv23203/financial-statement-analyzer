@@ -234,6 +234,29 @@ h1, h2, h3, h4, h5, [data-testid="stHeading"] * {font-family: var(--fsa-font-dis
 .fsa-section::before {content: ""; width: 4px; height: 1.05rem; border-radius: 2px; align-self: center;
   background: linear-gradient(180deg, #2962ff, #26a69a);}
 .fsa-section .hint {font-size: .8rem; font-weight: 400; color: var(--fsa-muted); letter-spacing: 0;}
+/* category accents: health / risk / valuation / profitability / growth / data */
+.fsa-section {scroll-margin-top: 7.5rem;}
+.fsa-k-health::before {background: #42a5f5;} .fsa-k-risk::before {background: #ef5350;}
+.fsa-k-valuation::before {background: #ab47bc;} .fsa-k-profitability::before {background: #26a69a;}
+.fsa-k-growth::before {background: #ffb300;} .fsa-k-data::before {background: #8b97a8;}
+.fsa-kind {font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  padding: .12rem .45rem; border-radius: 999px; border: 1px solid var(--fsa-border);
+  color: var(--fsa-muted); align-self: center;}
+.fsa-k-health .fsa-kind {color: #90caf9; border-color: #42a5f555;}
+.fsa-k-risk .fsa-kind {color: #ef9a9a; border-color: #ef535055;}
+.fsa-k-valuation .fsa-kind {color: #ce93d8; border-color: #ab47bc55;}
+.fsa-k-profitability .fsa-kind {color: #80cbc4; border-color: #26a69a55;}
+.fsa-k-growth .fsa-kind {color: #ffd54f; border-color: #ffb30055;}
+/* in-page navigation and guides */
+.fsa-nav {display: flex; flex-wrap: wrap; gap: .4rem; margin: .2rem 0 .8rem 0;}
+.fsa-nav a {font-size: .8rem; padding: .28rem .75rem; border-radius: 999px; text-decoration: none;
+  color: var(--fsa-text, #e6edf3); background: var(--fsa-surface); border: 1px solid var(--fsa-border);}
+.fsa-nav a:hover, .fsa-nav a:focus {border-color: #2962ff; outline: none;}
+.fsa-guide {padding: .9rem 1.1rem; border-radius: var(--fsa-radius); margin: .4rem 0 .9rem 0;
+  background: var(--fsa-surface); border: 1px solid var(--fsa-border);}
+.fsa-guide ol {margin: .45rem 0 0 0; padding-left: 1.2rem;}
+.fsa-guide li {margin-bottom: .3rem; font-size: .88rem; line-height: 1.45; color: #b8c2cf;}
+@media (prefers-reduced-motion: reduce) {.fsa-tape .track {animation: none;}}
 .fsa-status {display: grid; gap: .6rem; margin: .4rem 0 .8rem 0;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));}
 div[data-testid="stMetric"] {background: var(--fsa-surface); border-radius: var(--fsa-radius);
@@ -387,10 +410,39 @@ def flag_card(period: str, severity: str, title: str, condition: str,
             f'<div class="body">{escape(condition)}<br>{escape(description)}</div></div>')
 
 
-def section(title: str, hint: str | None = None) -> str:
-    """Section heading with an accent bar and an optional muted explanation."""
+# Section categories: one restrained accent colour each, so health, risk, valuation,
+# profitability and growth are recognisable across every page.
+SECTION_KINDS = {
+    "health": ("#42a5f5", "Health"), "risk": ("#ef5350", "Risk"),
+    "valuation": ("#ab47bc", "Valuation"), "profitability": ("#26a69a", "Profitability"),
+    "growth": ("#ffb300", "Growth"), "data": ("#8b97a8", "Data"),
+}
+
+
+def section(title: str, hint: str | None = None, kind: str | None = None,
+            anchor: str | None = None) -> str:
+    """Section heading with an accent bar (coloured by *kind*), an optional category
+    label, an optional muted explanation and an optional in-page anchor id."""
     extra = f'<span class="hint">{escape(hint)}</span>' if hint else ""
-    return f'<div class="fsa-section">{escape(title)}{extra}</div>'
+    label = ""
+    cls = "fsa-section"
+    if kind in SECTION_KINDS:
+        cls += f" fsa-k-{kind}"
+        label = f'<span class="fsa-kind">{escape(SECTION_KINDS[kind][1])}</span>'
+    ident = f' id="{escape(anchor)}"' if anchor else ""
+    return f'<div class="{cls}"{ident}>{escape(title)}{label}{extra}</div>'
+
+
+def page_nav(links: list[tuple[str, str]]) -> str:
+    """Row of in-page jump links: [(label, anchor id)]."""
+    items = "".join(f'<a href="#{escape(a)}">{escape(label)}</a>' for label, a in links)
+    return f'<nav class="fsa-nav" aria-label="Sections on this page">{items}</nav>'
+
+
+def guide(title: str, steps: list[str]) -> str:
+    """Numbered how-to box."""
+    rows = "".join(f"<li>{escape(s)}</li>" for s in steps)
+    return f'<div class="fsa-guide"><b>{escape(title)}</b><ol>{rows}</ol></div>'
 
 
 def compact_number(value: float | None, currency: str | None = None) -> str:
@@ -473,5 +525,5 @@ def empty_state(icon: str, title: str, text: str) -> str:
 def footer(version: str) -> str:
     return ('<div class="fsa-footer"><span>Data: Yahoo Finance (statements, prices) · SEC '
             'EDGAR for validation · Educational project - not a credit rating or investment '
-            f'advice.</span><span>Scoring {escape(version)} · Methodology: docs/'
-            'SCORING_METHODOLOGY.md</span></div>')
+            f'advice.</span><span>Health Score {escape(version)} · Methodology: docs/'
+            'HEALTH_SCORE_FRAMEWORK.md</span></div>')
