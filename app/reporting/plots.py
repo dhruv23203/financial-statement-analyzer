@@ -32,9 +32,13 @@ def _style(fig: go.Figure, height: int, legend: bool = True) -> go.Figure:
                         font_family="Inter, sans-serif"),
         showlegend=legend,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, bgcolor="rgba(0,0,0,0)"),
-        colorway=PALETTE)
-    fig.update_xaxes(gridcolor=GRID, zeroline=False)
-    fig.update_yaxes(gridcolor=GRID, zeroline=False)
+        colorway=PALETTE,
+        # no drag/pinch/tap zoom: on phones a tap or swipe on the chart zoomed it by
+        # accident. Tapping still shows the hover values; ranges come from the app's
+        # own period buttons.
+        dragmode=False)
+    fig.update_xaxes(gridcolor=GRID, zeroline=False, fixedrange=True)
+    fig.update_yaxes(gridcolor=GRID, zeroline=False, fixedrange=True)
     return fig
 
 

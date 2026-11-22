@@ -29,7 +29,9 @@ RISK_PROFILES = ("conservative", "moderate", "aggressive")
 SEVERITY = {"High": "#ef5350", "Medium": "#fb8c00", "Low": "#42a5f5"}
 VAL_COLORS = {"Undervalued": "#26a69a", "Fairly valued": "#9ccc65", "Overvalued": "#ef5350",
               NO_DATA: "#8b97a8"}
-CHART_CONFIG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
+CHART_CONFIG = {"displaylogo": False, "scrollZoom": False, "doubleClick": False,
+                "modeBarButtonsToRemove": ["lasso2d", "select2d", "zoom2d", "pan2d", "zoomIn2d",
+                                           "zoomOut2d", "autoScale2d", "resetScale2d"]}
 TABLE_COLS = ["ticker", "name", "sector", "score", "val_label", "val_score",
               "price_to_earnings", "upside", "headline"]
 TABLE_NAMES = {"ticker": "Ticker", "name": "Company", "sector": "Sector", "score": "Health",

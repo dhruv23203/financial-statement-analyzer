@@ -49,7 +49,9 @@ KEY_RATIOS = (("return_on_equity", "ROE"), ("return_on_capital_employed", "ROCE"
               ("current_ratio", "Current ratio"), ("interest_coverage", "Interest cover"),
               ("piotroski_f_score", "Piotroski F"), ("altman_z_score", "Altman Z''"),
               ("beneish_m_score", "Beneish M"))
-CHART_CONFIG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
+CHART_CONFIG = {"displaylogo": False, "scrollZoom": False, "doubleClick": False,
+                "modeBarButtonsToRemove": ["lasso2d", "select2d", "zoom2d", "pan2d", "zoomIn2d",
+                                           "zoomOut2d", "autoScale2d", "resetScale2d"]}
 
 
 @st.cache_resource
