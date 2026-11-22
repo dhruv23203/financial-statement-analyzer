@@ -251,6 +251,34 @@ def fcff_base(values: dict[str, float], tax_rate: float, currency: str | None = 
     return fcff, parts, warnings
 
 
+def fcfe_base(values: dict[str, float], previous: dict[str, float], tax_rate: float,
+              currency: str | None = None) -> tuple[float, dict[str, Any], list[str]]:
+    """Free cash flow to equity of one fiscal year:
+
+        FCFE = FCFF - interest expense x (1 - t) + net borrowing,
+        net borrowing = total debt (this year) - total debt (previous year).
+
+    Both debt balances are required (a missing balance is never treated as zero). FCFE
+    pairs only with the cost of equity (``dcf.value_equity``)."""
+    fcff, parts, warnings = fcff_base(values, tax_rate, currency)
+    debt_now, debt_prev = _finite(values.get("total_debt")), _finite(previous.get("total_debt"))
+    if debt_now is None or debt_prev is None:
+        raise ValuationError("FCFE needs total debt for this and the previous year to "
+                             "measure net borrowing; it is not assumed to be zero.")
+    interest = _finite(values.get("interest_expense"))
+    if interest is None:
+        interest = _finite(values.get("interest_expense_non_operating"))
+    if interest is None:
+        if debt_now > 0:
+            raise ValuationError("FCFE needs the interest expense of a company with debt.")
+        interest = 0.0
+    after_tax_interest = abs(interest) * (1 - tax_rate)
+    net_borrowing = debt_now - debt_prev
+    fcfe = fcff - after_tax_interest + net_borrowing
+    return fcfe, {**parts, "fcff": fcff, "after_tax_interest_paid": after_tax_interest,
+                  "net_borrowing": net_borrowing, "fcfe": fcfe}, warnings
+
+
 def revenue_growth(inputs: ValuationInputs, min_growth: float, max_growth: float
                    ) -> tuple[float, str, list[str]]:
     """Revenue CAGR between the first and last available year, kept negative when the

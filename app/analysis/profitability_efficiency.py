@@ -43,6 +43,38 @@ def net_profit_margin(ds: FinancialDataset, period: date) -> RatioOutcome:
     return ok(code, period, inputs["net_income"] / inputs["total_revenue"] * HUNDRED, inputs)
 
 
+def gross_profit_margin(ds: FinancialDataset, period: date) -> RatioOutcome:
+    """Gross Profit / Revenue x 100. Reported gross profit first; otherwise
+    Revenue - Cost of Revenue (labelled). Banks report neither, so it is unavailable."""
+    code = "gross_profit_margin"
+    revenue, gross = ds.get(period, "total_revenue"), ds.get(period, "gross_profit")
+    method, cogs = "REPORTED_GROSS_PROFIT", ds.get(period, "cost_of_revenue")
+    if gross is None and revenue is not None and cogs is not None:
+        gross, method = revenue - cogs, "REVENUE_MINUS_COST_OF_REVENUE"
+    inputs = {"gross_profit": gross, "total_revenue": revenue, "cost_of_revenue": cogs}
+    problem = missing_outcome(code, period, {"gross_profit": gross, "total_revenue": revenue},
+                              method) or denominator_problem(
+        code, period, revenue, "Total Revenue", inputs, method)
+    if problem:
+        return problem
+    explanation = None if method == "REPORTED_GROSS_PROFIT" else \
+        "Gross profit not reported: computed as Revenue - Cost of Revenue."
+    return ok(code, period, gross / revenue * HUNDRED, inputs, method, explanation)
+
+
+def operating_profit_margin(ds: FinancialDataset, period: date) -> RatioOutcome:
+    """Operating Income / Revenue x 100 (operating income excludes other income)."""
+    code = "operating_profit_margin"
+    inputs = {"operating_income": ds.get(period, "operating_income"),
+              "total_revenue": ds.get(period, "total_revenue")}
+    problem = missing_outcome(code, period, inputs) or denominator_problem(
+        code, period, inputs["total_revenue"], "Total Revenue", inputs)
+    if problem:
+        return problem
+    return ok(code, period, inputs["operating_income"] / inputs["total_revenue"] * HUNDRED,
+              inputs)
+
+
 def _average_based(ds: FinancialDataset, period: date, code: str, numerator_code: str,
                    balance_code: str, label: str, fallback: str,
                    scale: bool) -> RatioOutcome:
@@ -125,6 +157,15 @@ def inventory_turnover(ds: FinancialDataset, period: date,
     return outcome
 
 
+def receivables_turnover(ds: FinancialDataset, period: date,
+                         fallback: str = "ending_balance") -> RatioOutcome:
+    """Revenue / Average Accounts Receivable (total revenue is used because credit sales
+    are not disclosed separately - a common approximation)."""
+    return _average_based(ds, period, "receivables_turnover", "total_revenue",
+                          "accounts_receivable", "Average Accounts Receivable", fallback,
+                          scale=False)
+
+
 def operating_cash_flow_margin(ds: FinancialDataset, period: date) -> RatioOutcome:
     code = "operating_cash_flow_margin"
     inputs = {"operating_cash_flow": ds.get(period, "operating_cash_flow"),
@@ -177,9 +218,11 @@ def free_cash_flow_margin(ds: FinancialDataset, period: date) -> RatioOutcome:
 
 def calculate_profitability_efficiency(ds: FinancialDataset, period: date,
                                        fallback: str = "ending_balance") -> list[RatioOutcome]:
-    return [net_profit_margin(ds, period), return_on_assets(ds, period, fallback),
+    return [gross_profit_margin(ds, period), operating_profit_margin(ds, period),
+            net_profit_margin(ds, period), return_on_assets(ds, period, fallback),
             return_on_equity(ds, period, fallback), asset_turnover(ds, period, fallback),
-            inventory_turnover(ds, period, fallback)]
+            inventory_turnover(ds, period, fallback),
+            receivables_turnover(ds, period, fallback)]
 
 
 def calculate_cash_flow_ratios(ds: FinancialDataset, period: date) -> list[RatioOutcome]:

@@ -113,8 +113,8 @@ def _cached_beta(provider: str, ticker: str, benchmark: str, _ctx) -> dict:
     """Cached only when the inputs were downloaded: a deterministic result (a beta, or a
     model error such as too few common months) is kept for a day; a download failure
     raises and is retried on the next run."""
-    stock = _ctx.provider.fetch_price_history(ticker, "5y", adjusted=True)
-    market = _ctx.provider.fetch_price_history(benchmark, "5y", adjusted=True)
+    stock = _ctx.provider.fetch_price_history(ticker, "5y", adjusted=True, interval="1d")
+    market = _ctx.provider.fetch_price_history(benchmark, "5y", adjusted=True, interval="1d")
     if stock.empty or market.empty:
         raise _PriceUnavailable(f"Price history unavailable for {ticker} or {benchmark}.")
     monthly = lambda f: f["Close"].resample("ME").last()  # noqa: E731
@@ -122,7 +122,8 @@ def _cached_beta(provider: str, ticker: str, benchmark: str, _ctx) -> dict:
     try:
         b = capm.estimate_beta(monthly(stock), monthly(market), benchmark, cfg["period"],
                                cfg["interval"], cfg["min_observations"],
-                               "adjusted closes (splits and dividends) for the stock; the "
+                               "daily adjusted closes (splits and dividends) sampled at "
+                               "calendar month-end for the stock; the "
                                "benchmark is a price index (dividends excluded); month-end, "
                                "common months only")
     except ValuationError as exc:

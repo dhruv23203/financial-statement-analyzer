@@ -96,11 +96,14 @@ class YFinanceProvider(FinancialDataProvider):
             self._info_cache[ticker] = info if isinstance(info, dict) else {}
         return self._info_cache[ticker]
 
-    def fetch_price_history(self, ticker: str, period: str = "1y",
-                            adjusted: bool = False) -> pd.DataFrame:
+    def fetch_price_history(self, ticker: str, period: str = "1y", adjusted: bool = False,
+                            interval: str | None = None) -> pd.DataFrame:
         """OHLCV history. ``adjusted=True`` returns prices adjusted for splits and
         dividends (total-return consistent) - used for beta; charts use raw closes."""
-        interval = "1wk" if period in ("5y", "10y", "max") else "1d"
+        # weekly bars for long chart ranges unless a caller asks for an interval (beta
+        # needs daily closes: weekly bars are dated Monday but carry Friday's close, so a
+        # "month-end" weekly bar can hold the next month's price)
+        interval = interval or ("1wk" if period in ("5y", "10y", "max") else "1d")
         try:
             frame = self._ticker(ticker).history(period=period, interval=interval,
                                                  auto_adjust=adjusted)

@@ -161,10 +161,15 @@ def calculate_valuation(ds: FinancialDataset, period: date) -> list[RatioOutcome
         return ok("price_to_book", period, cap / equity, inputs, "MARKET_SNAPSHOT", note)
 
     def ev_ebitda(cap: Decimal) -> RatioOutcome:
-        ebitda_value = ebitda
-        if ebitda_value is None and g(period, "operating_income") is not None and \
-                g(period, "depreciation_amortization_cf") is not None:
-            ebitda_value = g(period, "operating_income") + g(period, "depreciation_amortization_cf")
+        # Operating EBITDA (operating income + D&A): the provider's EBITDA starts from
+        # EBIT including interest and other income on cash, while EV already nets that
+        # cash - mixing them would count the cash twice. Provider EBITDA only as fallback.
+        dep = g(period, "reconciled_depreciation")
+        if dep is None:
+            dep = g(period, "depreciation_amortization_cf")
+        operating = g(period, "operating_income")
+        ebitda_value = operating + abs(dep) if (operating is not None and dep is not None) \
+            else ebitda
         inputs = {"market_cap": cap, "total_debt": debt, "cash_and_equivalents": cash,
                   "ebitda": ebitda_value}
         missing = [k for k, v in inputs.items() if v is None]

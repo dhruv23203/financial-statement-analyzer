@@ -77,6 +77,11 @@ RATIO_DEFINITIONS: dict[str, RatioDefinition] = {d.code: d for d in (
     _d("interest_coverage", "Interest Coverage", "SOLVENCY", "x",
        "EBIT / |Interest Expense| (Operating Income used as EBIT proxy when EBIT is absent)",
        True),
+    _d("gross_profit_margin", "Gross Profit Margin", "PROFITABILITY", "%",
+       "Gross Profit / Total Revenue x 100 (Gross Profit = Revenue - Cost of Revenue when "
+       "not reported)", True),
+    _d("operating_profit_margin", "Operating Profit Margin", "PROFITABILITY", "%",
+       "Operating Income / Total Revenue x 100", True),
     _d("net_profit_margin", "Net Profit Margin", "PROFITABILITY", "%",
        "Net Income / Total Revenue x 100", True),
     _d("return_on_assets", "Return on Assets (ROA)", "PROFITABILITY", "%",
@@ -87,6 +92,8 @@ RATIO_DEFINITIONS: dict[str, RatioDefinition] = {d.code: d for d in (
        "Total Revenue / Average Total Assets", True),
     _d("inventory_turnover", "Inventory Turnover", "EFFICIENCY", "x",
        "Cost of Revenue / Average Inventory", True),
+    _d("receivables_turnover", "Receivables Turnover", "EFFICIENCY", "x",
+       "Total Revenue / Average Accounts Receivable", True),
     _d("operating_cash_flow_margin", "Operating Cash Flow Margin", "CASH_FLOW", "%",
        "Operating Cash Flow / Total Revenue x 100", True),
     _d("cash_conversion", "Cash Conversion", "CASH_FLOW", "x",
@@ -107,7 +114,8 @@ RATIO_DEFINITIONS: dict[str, RatioDefinition] = {d.code: d for d in (
        "Market Capitalisation / Shareholders' Equity (equity > 0)", False),
     _d("ev_to_ebitda", "EV / EBITDA", "VALUATION", "x",
        "(Market Cap + Total Debt + Minority Interest - Cash & Short-Term Investments) / "
-       "EBITDA (EBITDA > 0)", False),
+       "operating EBITDA (Operating Income + D&A; provider EBITDA if absent; EBITDA > 0)",
+       False),
     _d("dividend_yield", "Dividend Yield", "VALUATION", "%",
        "|Cash Dividends Paid| (latest year) / Market Capitalisation x 100", True),
     # Established third-party scores (see app/analysis/benchmark_scores.py); not in the
