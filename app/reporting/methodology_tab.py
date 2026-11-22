@@ -176,25 +176,40 @@ def render_validation_evidence() -> None:
         return
     ev = json.loads(path.read_text(encoding="utf-8"))
     sv, dv = ev["score_validation"], ev["data_validation"]
-    st.markdown(ui.section("Evidence: is the score useful, is the data right?",
-                           "out-of-sample test and checks against official filings"),
+    st.markdown(ui.section("Evidence: what the score test does and does not show",
+                           "out-of-sample test, naive baselines and filing checks"),
                 unsafe_allow_html=True)
     base = sv["baseline_auc"]
+    naive = sv.get("naive_baselines") or {}
     counts = dv["status_counts"]
     st.markdown(ui.cards([
-        ("Out-of-sample AUC", f"{sv['oof_auc']:.2f}",
-         f"95% CI {sv['oof_auc_ci'][0]:.2f}-{sv['oof_auc_ci'][1]:.2f}", None),
-        ("Equal-weight baseline", f"{base.get('EQUAL', float('nan')):.2f}",
-         f"CRITIC-only {base.get('CRITIC', float('nan')):.2f}", None),
-        ("Sample", f"{sv['observations']:,}", f"company-years, {sv['companies']} companies",
-         None),
+        ("Score, out-of-sample AUC", f"{sv['oof_auc']:.2f}",
+         f"95% CI {sv['oof_auc_ci'][0]:.2f}-{sv['oof_auc_ci'][1]:.2f}; equal weights "
+         f"{base.get('EQUAL', float('nan')):.2f}", None),
+        ("Two-ratio baseline AUC", f"{naive['two_ratio_auc']:.2f}" if naive.get(
+            "two_ratio_auc") is not None else "N/A",
+         "min(net margin, OCF margin) this year", None),
+        ("Last-year-status baseline", f"{naive['persistence_auc']:.2f}" if naive.get(
+            "persistence_auc") is not None else "N/A",
+         "this year's loss / negative OCF", None),
         ("Filing checks matching", f"{counts.get('MATCH', 0)} / {dv['checks']}",
          f"{counts.get('CLOSE', 0)} close, {counts.get('DIFFERENT', 0)} different", None),
     ]), unsafe_allow_html=True)
     st.caption(
-        f"Score test: {sv['method']}. Label: {sv['label']}; {sv['positive_rate']:.1%} of "
-        "company-years are positive. AUC 0.5 = no better than chance, 1.0 = perfect "
-        f"ranking. Generated {sv['generated_at'][:10]}.")
+        f"Score test: {sv['method']} ({sv['observations']:,} company-years, "
+        f"{sv['companies']} companies). Label: {sv['label']}; {sv['positive_rate']:.1%} of "
+        "company-years are positive. AUC 0.5 = no better than chance, 1.0 = perfect ranking. "
+        f"Generated {sv['generated_at'][:10]}.")
+    if naive.get("two_ratio_auc") is not None:
+        st.caption(
+            "Limitation: the label is next year's loss or negative operating cash flow, and "
+            "the profitability and cash-flow categories measure this year's version of the "
+            "same thing, so much of the AUC is persistence. A two-ratio rule on the same "
+            f"kind of sample ({naive['observations']:,} company-years) reaches "
+            f"{naive['two_ratio_auc']:.2f}, at least as high as the full score: this test "
+            "does not show that the score adds information beyond those two ratios. It "
+            "describes relative financial position; it is not a validated distress "
+            "predictor.")
     st.caption(
         f"Data check: {dv['checks']} stored values for {dv['companies']} companies compared "
         f"with {dv['reference']} ({dv['thresholds']}); accessed {dv['accessed_on']}. "

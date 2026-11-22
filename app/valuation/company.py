@@ -5,6 +5,10 @@ every input is reported:
 
     FCFF = EBIT x (1 - tax rate) + D&A - capital expenditure - increase in net working capital
 
+EBIT here is *operating* EBIT (operating income; else provider EBIT less interest income).
+The provider's own "EBIT" line includes other and interest income earned on cash, and the
+equity bridge adds that cash separately, so using it would count the return on cash twice.
+
 (the cash-flow statement's "change in working capital" already carries the cash sign, so
 it is added: a negative value is an investment in working capital). Without EBIT, D&A or
 the working-capital change the cash-flow route is used, and interest is added back only
@@ -54,7 +58,8 @@ INPUT_METRICS = ("total_revenue", "operating_cash_flow", "capital_expenditure",
                  "interest_expense", "interest_expense_non_operating", "total_debt",
                  "cash_and_equivalents", "cash_and_short_term_investments",
                  "minority_interest", "diluted_average_shares", "ordinary_shares_number",
-                 "stockholders_equity", "ebit", "reconciled_depreciation",
+                 "stockholders_equity", "ebit", "operating_income", "interest_income",
+                 "reconciled_depreciation",
                  "depreciation_amortization_cf", "change_in_working_capital")
 # Where interest paid sits in the cash-flow statement, by reporting currency (proxy for
 # the reporting standard). Anything else is "unknown" and gets no add-back.
@@ -140,7 +145,7 @@ def load_inputs(ctx: AppContext, tickers: list[str] | None = None) -> dict[str, 
                 item.price = float(snap.price) if snap.price is not None else None
                 item.market_cap = float(snap.market_cap) if snap.market_cap is not None else None
                 item.price_currency = snap.currency
-                item.price_date = snap.fetched_at.date().isoformat() if snap.fetched_at else None
+                item.price_date = repo.snapshot_price_date(snap)
                 item.shares_outstanding = (float(snap.shares_outstanding)
                                            if snap.shares_outstanding is not None else None)
             out[company.ticker] = item
@@ -175,16 +180,31 @@ def fcff_base(values: dict[str, float], tax_rate: float, currency: str | None = 
         raise ValuationError(f"Tax rate {tax_rate} must be between 0 and 1.")
     v = {k: _finite(x) for k, x in values.items()}
     capex = v.get("capital_expenditure")
-    ebit = v.get("ebit")
+    warnings: list[str] = []
+    # Operating EBIT: the provider's "EBIT" is pre-tax income + interest expense, so it
+    # includes other and interest income earned on cash. The equity bridge adds that cash
+    # separately, so starting from it would count the return on cash twice. Operating
+    # income is used; failing that, EBIT less reported interest income.
+    ebit, ebit_source = v.get("operating_income"), "operating income"
+    if ebit is None and v.get("ebit") is not None:
+        if v.get("interest_income") is not None:
+            ebit = v["ebit"] - abs(v["interest_income"])
+            ebit_source = "EBIT less interest income (operating income not reported)"
+        else:
+            ebit = v["ebit"]
+            ebit_source = "reported EBIT (may include non-operating income)"
+            warnings.append("Operating income not reported: provider EBIT used, which may "
+                            "include non-operating income also captured by the cash in the "
+                            "equity bridge (value may be overstated).")
     da = v.get("reconciled_depreciation")
     if da is None:
         da = v.get("depreciation_amortization_cf")
     d_wc = v.get("change_in_working_capital")
-    warnings: list[str] = []
     if capex is not None and None not in (ebit, da, d_wc):
         nopat = ebit * (1 - tax_rate) if ebit > 0 else ebit   # no tax shield on a loss
         fcff = nopat + abs(da) - abs(capex) + d_wc
-        parts = {"method": "EBIT-based FCFF", "ebit": ebit, "nopat": nopat,
+        parts = {"method": "EBIT-based FCFF", "ebit": ebit, "ebit_source": ebit_source,
+                 "nopat": nopat,
                  "depreciation_amortization": abs(da), "capital_expenditure": -abs(capex),
                  "change_in_working_capital": d_wc, "fcff": fcff, "tax_rate": tax_rate,
                  "interest_classification": "not needed (starts from EBIT)",

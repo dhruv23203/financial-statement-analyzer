@@ -44,10 +44,10 @@ DISCLAIMER = ("Descriptive screening results from historical statements and a si
 
 
 @st.cache_data(show_spinner="Building the quality & value screen ...")
-def cached_advisor(db_path: str, analysis_marker: int, provider: str, risk: str,
+def cached_advisor(db_path: str, analysis_marker: str, provider: str, risk: str,
                    _ctx) -> pd.DataFrame:
-    """Cached like the dashboard's other reads: any new analysis changes the marker and
-    refreshes it. ``_ctx`` is excluded from the cache key (leading underscore)."""
+    """Keyed by database, data marker (new analysis or price snapshot), provider and risk
+    profile. ``_ctx`` is excluded from the key; it is always the context of ``provider``."""
     return advisor_frame(_ctx, risk)
 
 
@@ -104,33 +104,47 @@ def _fcff_text(c: dict, sym: str) -> str:
             f"{c.get('interest_classification', 'unknown')}")
 
 
+class _PriceUnavailable(Exception):
+    """Transient price failure: raised inside cached functions so it is NOT cached."""
+
+
 @st.cache_data(ttl=86400, show_spinner="Estimating beta from 5 years of prices ...")
+def _cached_beta(provider: str, ticker: str, benchmark: str, _ctx) -> dict:
+    """Cached only when the inputs were downloaded: a deterministic result (a beta, or a
+    model error such as too few common months) is kept for a day; a download failure
+    raises and is retried on the next run."""
+    stock = _ctx.provider.fetch_price_history(ticker, "5y", adjusted=True)
+    market = _ctx.provider.fetch_price_history(benchmark, "5y", adjusted=True)
+    if stock.empty or market.empty:
+        raise _PriceUnavailable(f"Price history unavailable for {ticker} or {benchmark}.")
+    monthly = lambda f: f["Close"].resample("ME").last()  # noqa: E731
+    cfg = capm.load_assumptions()["beta"]
+    try:
+        b = capm.estimate_beta(monthly(stock), monthly(market), benchmark, cfg["period"],
+                               cfg["interval"], cfg["min_observations"],
+                               "adjusted closes (splits and dividends) for the stock; the "
+                               "benchmark is a price index (dividends excluded); month-end, "
+                               "common months only")
+    except ValuationError as exc:
+        return {"error": str(exc)}
+    return vars(b)
+
+
 def cached_beta(provider: str, ticker: str, benchmark: str, _ctx) -> dict | None:
-    """Monthly-return beta against the market benchmark (5 years, refreshed daily).
-    Returns None (with the reason) when prices are unavailable - never a default beta."""
+    """Monthly-return beta against the market benchmark (5 years). Returns a dict with an
+    ``error`` key when no beta is available - never a default beta."""
     if provider != "yfinance":
         return {"error": "Beta needs live prices (Yahoo Finance data source)."}
     try:
-        # adjusted for splits and dividends, so returns are total-return consistent
-        stock = _ctx.provider.fetch_price_history(ticker, "5y", adjusted=True)
-        market = _ctx.provider.fetch_price_history(benchmark, "5y", adjusted=True)
-        if stock.empty or market.empty:
-            return {"error": f"Price history unavailable for {ticker} or {benchmark}."}
-        monthly = lambda f: f["Close"].resample("ME").last()  # noqa: E731
-        cfg = capm.load_assumptions()["beta"]
-        b = capm.estimate_beta(monthly(stock), monthly(market), benchmark, cfg["period"],
-                               cfg["interval"], cfg["min_observations"],
-                               "adjusted closes (splits and dividends), month-end, common "
-                               "months only")
-        return vars(b)
-    except ValuationError as exc:
+        return _cached_beta(provider, ticker, benchmark, _ctx)
+    except _PriceUnavailable as exc:
         return {"error": str(exc)}
     except Exception as exc:  # noqa: BLE001 - network or provider failure, shown to the user
         return {"error": f"Price download failed: {exc}"}
 
 
 @st.cache_data(show_spinner=False)
-def cached_inputs(db_path: str, marker: int, ticker: str, _ctx):
+def cached_inputs(db_path: str, marker: str, provider: str, ticker: str, _ctx):
     return load_inputs(_ctx, [ticker]).get(ticker)
 
 
@@ -140,7 +154,7 @@ def _table(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 # ----------------------------------------------------------------------------- Advisor tab
-def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: int, provider: str,
+def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: str, provider: str,
                        names: dict[str, str]) -> None:
     _html(ui.section("Quality & Value screen",
                      "financial health and valuation side by side - a description, not advice"))
@@ -302,7 +316,7 @@ def _money(cur: str, v) -> str:
     return "N/A" if v is None or pd.isna(v) else f"{cur}{v:,.0f}"
 
 
-def render_portfolio_tab(ctx, db_key: str, marker: int, provider: str) -> None:
+def render_portfolio_tab(ctx, db_key: str, marker: str, provider: str) -> None:
     _html(ui.section("Portfolio Doctor", "upload a broker holdings file; nothing is stored"))
     st.warning("Privacy: before uploading, remove account numbers, client IDs, names, PAN "
                "and any other personal details from the file. Only symbol, quantity, average "
@@ -470,12 +484,12 @@ def render_portfolio_tab(ctx, db_key: str, marker: int, provider: str) -> None:
                "Taxes, goals and time horizon are not considered. " + DISCLAIMER)
 
 
-def render_full_valuation(ctx, provider: str, db_key: str, marker: int, ticker: str, row,
+def render_full_valuation(ctx, provider: str, db_key: str, marker: str, ticker: str, row,
                           sym: str) -> None:
     """FCFF discounted at a CAPM/WACC for one company, with every input and source shown."""
     _html(ui.section("Full valuation: CAPM / WACC",
                      "FCFF discounted at WACC, then the equity bridge - inputs and sources below"))
-    inputs = cached_inputs(db_key, marker, ticker, ctx)
+    inputs = cached_inputs(db_key, marker, provider, ticker, ctx)
     if inputs is None:
         st.caption("No stored statements for this company.")
         return
@@ -524,7 +538,8 @@ def render_full_valuation(ctx, provider: str, db_key: str, marker: int, ticker: 
          "after cash, debt, minority", None),
         ("Intrinsic value / share", f"{sym}{v.value_per_share:,.2f}", v.shares_source, None),
         ("Price vs value", f"{v.upside:+.0%}" if v.upside is not None else "N/A",
-         "value / price - 1" if v.upside is not None else "no price in this currency", None),
+         (f"value / stored price {sym}{v.price:,.2f} ({inputs.price_date or 'date n/a'}) - 1"
+          if v.upside is not None else "no price in this currency"), None),
     ]))
     for warning in v.warnings:
         st.caption(f"⚠ {warning}")

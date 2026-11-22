@@ -92,8 +92,8 @@ RATIO_DEFINITIONS: dict[str, RatioDefinition] = {d.code: d for d in (
     _d("cash_conversion", "Cash Conversion", "CASH_FLOW", "x",
        "Operating Cash Flow / Net Income (only when Net Income > 0)", True),
     _d("free_cash_flow_margin", "Free Cash Flow Margin", "CASH_FLOW", "%",
-       "Free Cash Flow / Total Revenue x 100 (provider FCF; fallback Operating Cash Flow + "
-       "Capital Expenditure)", True),
+       "Free Cash Flow / Total Revenue x 100 (provider FCF; fallback Operating Cash Flow - "
+       "|Capital Expenditure|)", True),
     _d("return_on_capital_employed", "Return on Capital Employed (ROCE)", "PROFITABILITY", "%",
        "EBIT / Average Capital Employed x 100, Capital Employed = Total Assets - Current "
        "Liabilities (Operating Income used as EBIT proxy when EBIT is absent)", True),
@@ -106,7 +106,8 @@ RATIO_DEFINITIONS: dict[str, RatioDefinition] = {d.code: d for d in (
     _d("price_to_book", "Price / Book (P/B)", "VALUATION", "x",
        "Market Capitalisation / Shareholders' Equity (equity > 0)", False),
     _d("ev_to_ebitda", "EV / EBITDA", "VALUATION", "x",
-       "(Market Cap + Total Debt - Cash & Equivalents) / EBITDA (EBITDA > 0)", False),
+       "(Market Cap + Total Debt + Minority Interest - Cash & Short-Term Investments) / "
+       "EBITDA (EBITDA > 0)", False),
     _d("dividend_yield", "Dividend Yield", "VALUATION", "%",
        "|Cash Dividends Paid| (latest year) / Market Capitalisation x 100", True),
     # Established third-party scores (see app/analysis/benchmark_scores.py); not in the

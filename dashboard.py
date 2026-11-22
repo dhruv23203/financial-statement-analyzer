@@ -17,8 +17,9 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from app.analysis.comparison import (amounts_frame, compare_companies, ratios_frame,
-                                     summary_frame)
+from app.analysis.comparison import RATIO_METRICS as COMPARISON_RATIOS
+from app.analysis.comparison import (amounts_frame, compare_companies, period_labels,
+                                     ratios_frame, summary_frame)
 from app.analysis.ratios import RATIO_DEFINITIONS
 from app.reporting import plots, tables, ui
 from app.reporting.advisor_tabs import render_advisor_tab, render_portfolio_tab
@@ -26,7 +27,8 @@ from app.reporting.methodology_tab import render_methodology_tab
 from app.services import quarterly
 from app.services.context import AppContext, build_context
 from app.services.pipeline import company_history, run_pipeline
-from app.services.screener import (field_descriptions, find_peers, latest_analysis_id,
+from app.services.screener import (data_marker, field_descriptions, find_peers,
+                                   latest_analysis_id,
                                    run_screen, screen_frame)
 from app.services.queries import (StoredAnalysis, key_financials, list_company_summaries,
                                   load_stored_analysis)
@@ -64,39 +66,69 @@ def get_context(provider: str) -> AppContext:
     return _cached_context(provider, str(get_settings().db_path))
 
 
-# Expensive reads are cached; the newest analysis id is part of the key, so any new
-# analysis (from the sidebar, CLI or another process) refreshes them automatically.
+# Expensive reads are cached. Every cache key names the provider, the database file and
+# the data marker (newest analysis id + newest market snapshot id), so a new analysis or
+# price refresh - from the sidebar, the CLI or another process - refreshes them, and a
+# result computed under one provider is never served under the other. Cached functions
+# read only their arguments, never module-level state such as the sidebar selection.
+class _Uncached(Exception):
+    """Raised inside a cached function so a failed or empty provider call is NOT stored
+    (Streamlit does not cache exceptions); the caller turns it into a message."""
+
+
 @st.cache_data(show_spinner="Loading company data ...")
-def cached_screen_frame(db_path: str, analysis_marker: int) -> pd.DataFrame:
-    return screen_frame(get_context(PROVIDERS[provider_label]))
+def cached_screen_frame(provider: str, db_path: str, marker: str) -> pd.DataFrame:
+    return screen_frame(get_context(provider))
 
 
 @st.cache_data(show_spinner=False)
-def cached_summaries(db_path: str, analysis_marker: int) -> list[dict]:
-    return list_company_summaries(get_context(PROVIDERS[provider_label]))
+def cached_summaries(provider: str, db_path: str, marker: str) -> list[dict]:
+    return list_company_summaries(get_context(provider))
 
 
 @st.cache_data(ttl=3600, show_spinner="Loading prices ...")
+def _cached_prices(provider: str, ticker: str, period: str) -> pd.DataFrame:
+    frame = get_context(provider).provider.fetch_price_history(ticker, period)
+    if frame.empty:
+        raise _Uncached(f"no price history for {ticker}")
+    return frame
+
+
 def cached_prices(provider: str, ticker: str, period: str) -> pd.DataFrame:
-    """Live price history for the chart (display only, refreshed hourly)."""
-    return get_context(provider).provider.fetch_price_history(ticker, period)
+    """Live price history for the chart (display only, refreshed hourly). An empty
+    answer (often a transient provider failure) is retried on the next run, not cached."""
+    try:
+        return _cached_prices(provider, ticker, period)
+    except _Uncached:
+        return pd.DataFrame()
 
 
 @st.cache_data(ttl=6 * 3600, show_spinner="Loading quarterly statements ...")
-def cached_quarterly(provider: str, ticker: str) -> tuple[pd.DataFrame, str | None]:
-    """Quarterly income and cash-flow statements from the provider (display only)."""
+def _cached_quarterly(provider: str, ticker: str) -> pd.DataFrame:
     prov = get_context(provider).provider
+    income = prov.fetch_statement(ticker, "income_statement", "quarterly")
+    cash = prov.fetch_statement(ticker, "cash_flow", "quarterly")
+    table = quarterly.quarterly_table(income, cash)
+    if table.empty:
+        raise _Uncached("no quarterly statements from the data source")
+    return table
+
+
+def cached_quarterly(provider: str, ticker: str) -> tuple[pd.DataFrame, str | None]:
+    """Quarterly income and cash-flow statements (display only). Failures are shown and
+    retried on the next run - they are never cached."""
     try:
-        income = prov.fetch_statement(ticker, "income_statement", "quarterly")
-        cash = prov.fetch_statement(ticker, "cash_flow", "quarterly")
+        return _cached_quarterly(provider, ticker), None
+    except _Uncached as exc:
+        return pd.DataFrame(), f"Quarterly statements unavailable: {exc}."
     except Exception as exc:  # noqa: BLE001 - provider failure is shown, not hidden
         return pd.DataFrame(), f"Quarterly statements unavailable: {exc}"
-    return quarterly.quarterly_table(income, cash), None
 
 
-@st.cache_resource(max_entries=64)
-def cached_analysis(provider: str, db_path: str, ticker: str, marker: int) -> StoredAnalysis:
-    """Stored analysis per company; the newest analysis id in the key refreshes it."""
+@st.cache_data(max_entries=64, show_spinner=False)
+def cached_analysis(provider: str, db_path: str, ticker: str, marker: str) -> StoredAnalysis:
+    """Stored analysis per company. cache_data (not cache_resource) returns a copy to
+    every session, so one user's session can never mutate another user's object."""
     return load_stored_analysis(get_context(provider), ticker)
 
 
@@ -240,8 +272,8 @@ if submitted:
                 st.error(result.error)
 
 DB_KEY = str(ctx.settings.db_path)
-MARKER = latest_analysis_id(ctx)
-companies = cached_summaries(DB_KEY, MARKER)
+MARKER = data_marker(ctx)
+companies = cached_summaries(PROVIDER, DB_KEY, MARKER)
 names = {c["ticker"]: c["name"] or "" for c in companies}
 analysed = [c["ticker"] for c in companies if c["analysed"]]
 st.sidebar.markdown(ui.side_label("Watchlist"), unsafe_allow_html=True)
@@ -264,7 +296,7 @@ st.sidebar.divider()
 st.sidebar.caption("Educational analysis - not a credit rating or investment advice. "
                    "Data: Yahoo Finance.")
 
-_tape_frame = cached_screen_frame(DB_KEY, MARKER)
+_tape_frame = cached_screen_frame(PROVIDER, DB_KEY, MARKER)
 if not _tape_frame.empty and "score" in _tape_frame:
     _top = _tape_frame.dropna(subset=["score"]).nlargest(30, "score")
     html(ui.ticker_tape([(t, float(v), ui.score_color(float(v)))
@@ -703,7 +735,7 @@ with tab_compare:
         try:
             st.session_state["peer_preset"] = [selected] + find_peers(
                 ctx, selected, MAX_COMPARISON_COMPANIES - 1,
-                frame=cached_screen_frame(DB_KEY, MARKER))
+                frame=cached_screen_frame(PROVIDER, DB_KEY, MARKER))
         except AnalyzerError as exc:
             st.error(str(exc))
     if st.session_state.get("peer_preset"):
@@ -736,21 +768,23 @@ with tab_compare:
                     f"`{report.period_alignment}`")
         for warning in report.warnings:
             st.warning(warning)
-        tickers = [s.ticker for s in report.included]
         left, right = st.columns([1.2, 1])
         with left:
             snowflakes = {}
-            for t in tickers:
+            for snap in report.included:
+                # the same fiscal period as the table and bars (not simply the latest year)
                 try:
-                    cats = {c.category: c.score for c in
-                            cached_analysis(PROVIDER, DB_KEY, t, MARKER).latest_scores()}
+                    period_scores = cached_analysis(PROVIDER, DB_KEY, snap.ticker,
+                                                    MARKER).scores.get(snap.period, [])
                 except AnalyzerError:
                     continue
-                snowflakes[t] = {c: None if cats.get(c) is None else float(cats[c])
-                                 for c in CATEGORIES}
+                cats = {c.category: c.score for c in period_scores}
+                snowflakes[snap.ticker] = {c: None if cats.get(c) is None else float(cats[c])
+                                           for c in CATEGORIES}
             if snowflakes:
                 chart(plots.category_radar(snowflakes, height=380), key="cmp_radar")
-                st.caption("Category scores from each company's latest stored analysis.")
+                st.caption("Category scores for the same fiscal periods as the table: "
+                           + period_labels(report) + ".")
         with right:
             scores = {s.ticker: float(s.overall_score) for s in report.included
                       if s.overall_score is not None}
@@ -760,7 +794,7 @@ with tab_compare:
         show_table(summary_frame(report))
         html(ui.section("Ratios (rank in brackets)"))
         show_table(ratios_frame(report))
-        ratio_pick = st.selectbox("Chart a ratio", list(RATIO_DEFINITIONS)[:10],
+        ratio_pick = st.selectbox("Chart a ratio", list(COMPARISON_RATIOS),
                                   format_func=lambda c: RATIO_DEFINITIONS[c].name)
         values = {s.ticker: float(s.ratios[ratio_pick].value) for s in report.included
                   if ratio_pick in s.ratios and s.ratios[ratio_pick].value is not None}
@@ -768,7 +802,7 @@ with tab_compare:
             chart(plots.ranked_bars(values, RATIO_DEFINITIONS[ratio_pick].name),
                   key="cmp_ratio")
         else:
-            st.caption("This ratio is only shown for the 8 comparison ratios with data.")
+            st.caption("No company in this comparison has a value for this ratio.")
         html(ui.section("Absolute amounts (own currency, millions)"))
         show_table(amounts_frame(report))
 
@@ -803,14 +837,18 @@ with tab_screen:
     s3.write("")
     if s3.button("Run screen", type="primary", width="stretch"):
         try:
-            st.session_state["screen"] = run_screen(
+            st.session_state["screen"] = (*run_screen(
                 ctx, query, sort_by, False, int(limit),
-                frame=cached_screen_frame(DB_KEY, MARKER))
+                frame=cached_screen_frame(PROVIDER, DB_KEY, MARKER)), (PROVIDER, MARKER))
         except AnalyzerError as exc:
             st.session_state.pop("screen", None)
             st.error(str(exc))
+    if st.session_state.get("screen") is not None and             st.session_state["screen"][2] != (PROVIDER, MARKER):
+        # data source or stored data changed since the screen ran: never show old results
+        st.session_state.pop("screen")
+        st.info("The data changed since this screen was run - run it again.")
     if st.session_state.get("screen") is not None:
-        result, total = st.session_state["screen"]
+        result, total, _ = st.session_state["screen"]
         st.success(f"{len(result)} shown of {total} companies screened")
         lead = [c for c in ("ticker", "name", "sector", "score") if c in result]
         ordered = result[lead + [c for c in result.columns if c not in lead]].round(2)
@@ -818,7 +856,7 @@ with tab_screen:
         st.download_button("⬇ Download results (CSV)", result.to_csv(index=False),
                            file_name="screen_results.csv", mime="text/csv")
     with st.expander("All screenable fields"):
-        frame_fields = cached_screen_frame(DB_KEY, MARKER)
+        frame_fields = cached_screen_frame(PROVIDER, DB_KEY, MARKER)
         descriptions = field_descriptions()
         show_table(pd.DataFrame({"Field": sorted(frame_fields.columns),
                                  "Meaning": [descriptions.get(f, "") for f in
@@ -836,7 +874,7 @@ SCATTER_FIELDS = {"price_to_earnings": "P/E", "return_on_equity": "ROE %",
                   "piotroski_f_score": "Piotroski F", "score": "Overall score"}
 
 with tab_map:
-    frame = cached_screen_frame(DB_KEY, MARKER)
+    frame = cached_screen_frame(PROVIDER, DB_KEY, MARKER)
     if frame.empty:
         st.info("No analysed companies yet.")
     else:

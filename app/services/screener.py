@@ -37,6 +37,9 @@ SHORT_NAMES = {
     "beneish": "beneish_m_score", "cr": "current_ratio", "qr": "quick_ratio",
 }
 TEXT_FIELDS = ("ticker", "name", "sector", "industry", "currency")
+# Absolute amounts in each company's own currency (revenue: statement currency; market cap:
+# trading currency). Comparing them across INR and USD companies would treat Rs 1 as $1.
+ABSOLUTE_FIELDS = ("revenue", "market_cap")
 _CONDITION = re.compile(
     r"^\s*([a-z_]+)\s*(>=|<=|==|!=|>|<)\s*(\"[^\"]*\"|'[^']*'|-?\d+(?:\.\d+)?|[A-Za-z][\w .&-]*)\s*$")
 
@@ -131,6 +134,19 @@ def parse_query(query: str, columns: list[str]) -> list[Condition]:
     return conditions
 
 
+def data_marker(ctx: AppContext) -> str:
+    """Cache key for everything read from the database: changes when a new analysis
+    *or* a new market snapshot is stored (prices feed P/E, P/B and the DCF comparison)."""
+    from sqlalchemy import func
+
+    from app.database.models import AnalysisRun
+
+    with ctx.db.session_scope() as session:
+        analysis = session.scalar(select(func.max(AnalysisRun.id))) or 0
+        snapshot = session.scalar(select(func.max(MarketSnapshot.id))) or 0
+    return f"a{analysis}-s{snapshot}"
+
+
 def latest_analysis_id(ctx: AppContext) -> int:
     """Cheap change marker: the newest analysis run id (used as a cache key)."""
     from sqlalchemy import func
@@ -151,12 +167,20 @@ def run_screen(ctx: AppContext, query: str, sort_by: str = "score", ascending: b
     if frame.empty:
         raise DataNotFoundError("No analysed companies yet. Run: python main.py analyze-universe")
     conditions = parse_query(query, available_fields(frame))
+    absolute = [c.field for c in conditions if c.field in ABSOLUTE_FIELDS]
+    one_currency = any(c.field == "currency" and c.operator == "==" for c in conditions)
+    if absolute and not one_currency and frame["currency"].nunique(dropna=True) > 1:
+        raise ScreenError(
+            f"{', '.join(absolute)} is an amount in each company's own currency, and the "
+            "analysed companies report in several currencies (no FX conversion is done). "
+            "Add a currency condition, e.g. `and currency == INR`.")
     mask = pd.Series(True, index=frame.index)
     for c in conditions:
         column = frame[c.field]
         if isinstance(c.value, str):
             hit = column.astype(str).str.lower() == c.value.lower()
-            mask &= hit if c.operator == "==" else ~hit
+            # a missing text value matches neither == nor != (no imputation)
+            mask &= column.notna() & (hit if c.operator == "==" else ~hit)
         else:
             # Missing values never pass a numeric condition (no imputation).
             mask &= column.notna() & {
@@ -197,7 +221,9 @@ def find_peers(ctx: AppContext, raw_ticker: str, count: int = 4,
         return []
     pool = pool.assign(same_currency=(pool["currency"] == me["currency"]).astype(int))
     if "revenue" in pool and pd.notna(me.get("revenue")) and me["revenue"] > 0:
-        size = pool["revenue"].where(pool["revenue"] > 0)
+        # revenue size is only comparable within one currency (no FX conversion); peers in
+        # another currency keep no size gap and sort after the same-currency ones
+        size = pool["revenue"].where((pool["revenue"] > 0) & (pool["same_currency"] == 1))
         pool = pool.assign(size_gap=(size.map(math.log) - math.log(me["revenue"])).abs())
     else:
         pool = pool.assign(size_gap=0.0)

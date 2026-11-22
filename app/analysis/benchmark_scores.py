@@ -241,6 +241,8 @@ def sws_health_checks(ds: FinancialDataset, period: date) -> RatioOutcome:
     equity, ocf = g(period, "stockholders_equity"), g(period, "operating_cash_flow")
     ebit = g(period, "ebit") if g(period, "ebit") is not None else g(period, "operating_income")
     interest = g(period, "interest_expense")
+    if interest is None:
+        interest = g(period, "interest_expense_non_operating")
     earliest = next((p for p in ds.periods if p < period and (period - p).days >= 3 * 330), None)
     inputs = {"current_assets": ca, "current_liabilities": cl, "total_liabilities": tl,
               "total_debt": debt, "stockholders_equity": equity, "operating_cash_flow": ocf}
@@ -251,14 +253,20 @@ def sws_health_checks(ds: FinancialDataset, period: date) -> RatioOutcome:
         return unavailable(code, period, "NON_POSITIVE_EQUITY",
                            "Debt-to-equity checks need positive equity.", inputs,
                            not_meaningful=True)
+    if interest is None and debt > 0:
+        # A company with debt but no interest line: the coverage check cannot be judged,
+        # and missing data is never treated as a pass (or as zero interest).
+        return _missing(code, period, ["interest expense (company has debt)"], inputs)
     de = debt / equity
     checks: dict[str, bool | None] = {
         "1 short-term assets > short-term liabilities": ca > cl,
         "2 short-term assets > long-term liabilities": ca > (tl - cl),
         "4 debt-to-equity < 40%": de < D("0.40"),
         "5 operating cash flow > 20% of debt": debt == 0 or ocf > D("0.20") * debt,
+        # no debt, or a reported zero interest expense: nothing to cover
         "6 EBIT > 5x interest (if interest paid)":
-            True if not interest else (ebit is not None and ebit > 5 * abs(interest)),
+            True if (interest is None or interest == 0)
+            else (ebit is not None and ebit > 5 * abs(interest)),
     }
     if earliest is not None and g(earliest, "total_debt") is not None and \
             g(earliest, "stockholders_equity") and g(earliest, "stockholders_equity") > 0:

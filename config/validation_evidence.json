@@ -17,7 +17,19 @@
       "CRITIC": 0.783,
       "ENTROPY": 0.767
     },
-    "accepted": true
+    "accepted": true,
+    "naive_baselines": {
+      "observations": 2484,
+      "companies": 833,
+      "positive_rate": 0.0994,
+      "persistence_auc": 0.751,
+      "two_ratio_auc": 0.833,
+      "definitions": {
+        "persistence": "this year's status (net loss or negative operating cash flow) used as the prediction",
+        "two_ratio": "min(net margin, operating cash flow margin) this year, lower = riskier"
+      },
+      "source": "app/calibration/baselines.py on the stored statements"
+    }
   },
   "data_validation": {
     "accessed_on": "2026-11-12",

@@ -215,11 +215,18 @@ def _action(key: str | None, weight: float | None) -> tuple[str, str]:
             return "REVIEW: LARGE & HIGH VALUATION", ("Valued above its model value and "
                                                      "already a large position.")
         return "HIGH VALUATION", "Price is above the model value for its quality."
-    if key in BUY_KEYS:
+    if key == "BUY":
         if weight < 10:
-            return "STRONG · SMALL POSITION", ("Strong financials, price at or below model "
-                                              "value, small position.")
-        return "STRONG · WELL SIZED", "Strong financials and a well-sized position."
+            return "STRONG · SMALL POSITION", ("Strong financials, price at or below the "
+                                              "margin-of-safety price, small position.")
+        return "STRONG · WELL SIZED", ("Strong financials, price at or below the "
+                                       "margin-of-safety price, well-sized position.")
+    if key == "BUY_CHECK":
+        # valuation not conclusive: no DCF, no dated price, or price between the
+        # margin-of-safety price and the model value - never "below model value"
+        return "STRONG · VALUATION UNCLEAR", ("Strong financials; the valuation is not "
+                                             "conclusive (no DCF or dated price, or price "
+                                             "close to the model value).")
     if key == "WATCH":
         return "BELOW-AVERAGE FINANCIALS", "Financial health is below the universe median."
     if key == "NODATA":
@@ -419,6 +426,7 @@ def sample_holdings(advisor: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for sym, qty, factor in picks:
         p = prices.get(sym + ".NS")
-        rows.append({"Instrument": sym, "Qty.": qty,
-                     "Avg. cost": round(float(p) * factor, 2) if p and not pd.isna(p) else 100.0})
-    return pd.DataFrame(rows)
+        if not p or pd.isna(p):
+            continue   # no stored price: the demo row is skipped, never given a made-up cost
+        rows.append({"Instrument": sym, "Qty.": qty, "Avg. cost": round(float(p) * factor, 2)})
+    return pd.DataFrame(rows, columns=["Instrument", "Qty.", "Avg. cost"])

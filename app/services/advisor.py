@@ -123,8 +123,7 @@ def _extras(ctx: AppContext, tickers: list[str]) -> dict[str, dict[str, Any]]:
                 out[company.ticker]["price"] = _num(snap.price)
                 out[company.ticker]["shares"] = _num(snap.shares_outstanding)
                 out[company.ticker]["price_currency"] = snap.currency
-                out[company.ticker]["price_date"] = (snap.fetched_at.date().isoformat()
-                                                     if snap.fetched_at else None)
+                out[company.ticker]["price_date"] = repo.snapshot_price_date(snap)
         ids = list(runs)
         for chunk in (ids[i:i + 500] for i in range(0, len(ids), 500)):
             for t in session.scalars(select(TrendResult).where(

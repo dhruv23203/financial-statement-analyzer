@@ -187,3 +187,16 @@ def comparison_runs_for_company(session: Session, company_id: int) -> Sequence[C
         .join(ComparisonCompany, ComparisonCompany.comparison_run_id == ComparisonRun.id)
         .where(ComparisonCompany.company_id == company_id)
         .order_by(desc(ComparisonRun.id))).unique().all()
+
+
+def snapshot_price_date(snapshot) -> str | None:
+    """Date the stored price refers to: the quote's market time when the provider gave
+    one (e.g. Friday's close fetched on Sunday is dated Friday), otherwise the date the
+    snapshot was fetched."""
+    values = getattr(snapshot, "provider_values", None) or {}
+    market_time = values.get("regularMarketTime")
+    if isinstance(market_time, (int, float)) and market_time > 0:
+        from datetime import datetime, timezone
+        return datetime.fromtimestamp(market_time, tz=timezone.utc).date().isoformat()
+    fetched = getattr(snapshot, "fetched_at", None)
+    return fetched.date().isoformat() if fetched else None

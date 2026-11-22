@@ -116,7 +116,13 @@ def calculate_valuation(ds: FinancialDataset, period: date) -> list[RatioOutcome
     g = ds.get
     ni, equity, ebitda = g(period, "net_income"), g(period, "stockholders_equity"), \
         g(period, "ebitda")
-    debt, cash = g(period, "total_debt"), g(period, "cash_and_equivalents")
+    debt = g(period, "total_debt")
+    # Same definitions as the DCF equity bridge: cash includes short-term investments
+    # when reported as one line; minority interest is a claim on the enterprise.
+    cash = g(period, "cash_and_short_term_investments")
+    if cash is None:
+        cash = g(period, "cash_and_equivalents")
+    minority = g(period, "minority_interest")
     dividends = g(period, "cash_dividends_paid")
 
     def build(code: str, compute) -> None:
@@ -169,7 +175,8 @@ def calculate_valuation(ds: FinancialDataset, period: date) -> list[RatioOutcome
             return unavailable("ev_to_ebitda", period, "NON_POSITIVE_EBITDA",
                                "EBITDA is zero or negative; EV/EBITDA not meaningful.", inputs,
                                not_meaningful=True)
-        ev = cap + debt - cash
+        ev = cap + debt - cash + (minority or 0)
+        inputs["minority_interest"] = minority
         inputs["enterprise_value"] = ev
         return ok("ev_to_ebitda", period, ev / ebitda_value, inputs, "MARKET_SNAPSHOT", note)
 

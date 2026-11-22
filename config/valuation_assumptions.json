@@ -3,8 +3,10 @@
   "description": "Market assumptions for the CAPM / WACC / DCF valuation engine (app/valuation). Every value has a source and an as-of date; update them before relying on a valuation. Educational project - not investment advice.",
   "markets": {
     "INR": {
-      "risk_free_rate": 0.072,
-      "risk_free_source": "India 10-year government bond yield, approx. 7.20% on 11 Nov 2026 (Trading Economics, India 10Y yield news)",
+      "risk_free_rate": 0.0533,
+      "risk_free_source": "India 10-year government bond yield approx. 7.20% on 11 Nov 2026 (Trading Economics) less India's sovereign default spread 1.87% (Moody's Baa3; Damodaran, Country Default Spreads and Risk Premiums, updated 5 Jan 2026) = 5.33%. The local-currency government yield already contains the default spread; the equity risk premium below adds the country risk premium, so keeping both would count India's country risk twice (Damodaran's method).",
+      "government_bond_yield": 0.072,
+      "sovereign_default_spread": 0.0187,
       "equity_risk_premium": 0.0708,
       "equity_risk_premium_source": "Damodaran, Country Default Spreads and Risk Premiums, updated 5 Jan 2026: India total ERP 7.08% (mature-market 4.23% + country risk premium 2.85%)",
       "benchmark_index": "^NSEI",

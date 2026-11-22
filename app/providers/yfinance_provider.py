@@ -124,7 +124,7 @@ class YFinanceProvider(FinancialDataProvider):
             "currency": info.get("currency"),
             "provider_values": {k: info.get(k) for k in (
                 "trailingPE", "priceToBook", "enterpriseValue", "enterpriseToEbitda",
-                "dividendYield", "trailingEps", "bookValue")},
+                "dividendYield", "trailingEps", "bookValue", "regularMarketTime")},
         }
 
     def fetch_metadata(self, ticker: str) -> dict[str, Any]:
