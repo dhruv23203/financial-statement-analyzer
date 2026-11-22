@@ -1,0 +1,5391 @@
+{
+  "version": "3.0.0",
+  "description": "Industry-specific Financial Health Score (0-100). Five pillars with declared point budgets; each metric is scored by its percentile among industry peers (sector, or the industry framework for financial companies), capped by absolute guardrails so that a weak company cannot score well just because its peers are weak. Budgets and metric weights are a declared design (not fitted to any outcome); see docs/HEALTH_SCORE_FRAMEWORK.md for the rationale, validation and sensitivity analysis. Missing data never receives points: it lowers the confidence and, below the minimums, withholds the score.",
+  "min_pillar_coverage": 0.5,
+  "min_assessed_share": 0.6,
+  "min_pillars": 3,
+  "min_peer_observations": 30,
+  "growth_window_years": [
+    0.9,
+    3.2
+  ],
+  "percentile_points": [
+    [
+      1,
+      0.0
+    ],
+    [
+      5,
+      0.05
+    ],
+    [
+      10,
+      0.1
+    ],
+    [
+      25,
+      0.25
+    ],
+    [
+      50,
+      0.5
+    ],
+    [
+      75,
+      0.75
+    ],
+    [
+      90,
+      0.9
+    ],
+    [
+      95,
+      0.95
+    ],
+    [
+      99,
+      1.0
+    ]
+  ],
+  "confidence_bands": [
+    {
+      "min": 0.85,
+      "label": "High"
+    },
+    {
+      "min": 0.6,
+      "label": "Medium"
+    },
+    {
+      "min": 0.0,
+      "label": "Low"
+    }
+  ],
+  "pillars": [
+    "PROFITABILITY",
+    "LIQUIDITY",
+    "SOLVENCY",
+    "EFFICIENCY",
+    "GROWTH"
+  ],
+  "metrics": {
+    "roce": {
+      "name": "Return on capital employed",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "ratio return_on_capital_employed"
+    },
+    "operating_margin": {
+      "name": "Operating margin",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "ratio operating_profit_margin"
+    },
+    "fcf_margin": {
+      "name": "Free-cash-flow margin",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "ratio free_cash_flow_margin"
+    },
+    "current_ratio": {
+      "name": "Current ratio",
+      "unit": "x",
+      "higher_is_better": true,
+      "source": "ratio current_ratio"
+    },
+    "ocf_to_current_liabilities": {
+      "name": "Operating cash flow / current liabilities",
+      "unit": "x",
+      "higher_is_better": true,
+      "source": "operating_cash_flow / current_liabilities"
+    },
+    "interest_coverage": {
+      "name": "Interest coverage",
+      "unit": "x",
+      "higher_is_better": true,
+      "source": "ratio interest_coverage"
+    },
+    "net_debt_to_ebitda": {
+      "name": "Net debt / operating EBITDA",
+      "unit": "x",
+      "higher_is_better": false,
+      "source": "(total_debt - cash) / (operating_income + D&A)"
+    },
+    "asset_turnover": {
+      "name": "Asset turnover",
+      "unit": "x",
+      "higher_is_better": true,
+      "source": "ratio asset_turnover"
+    },
+    "inventory_turnover": {
+      "name": "Inventory turnover",
+      "unit": "x",
+      "higher_is_better": true,
+      "source": "ratio inventory_turnover"
+    },
+    "receivables_turnover": {
+      "name": "Receivables turnover",
+      "unit": "x",
+      "higher_is_better": true,
+      "source": "ratio receivables_turnover"
+    },
+    "revenue_cagr": {
+      "name": "Revenue growth (CAGR, up to 3 years)",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "total_revenue"
+    },
+    "operating_income_cagr": {
+      "name": "Operating income growth (CAGR, up to 3 years)",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "operating_income"
+    },
+    "net_income_cagr": {
+      "name": "Net income growth (CAGR, up to 3 years)",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "net_income"
+    },
+    "roa": {
+      "name": "Return on assets",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "ratio return_on_assets"
+    },
+    "roe": {
+      "name": "Return on equity",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "ratio return_on_equity"
+    },
+    "net_margin": {
+      "name": "Net profit margin",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "ratio net_profit_margin"
+    },
+    "equity_to_assets": {
+      "name": "Equity / total assets (capital buffer)",
+      "unit": "%",
+      "higher_is_better": true,
+      "source": "stockholders_equity / total_assets x 100"
+    },
+    "debt_ratio": {
+      "name": "Debt ratio (total liabilities / total assets)",
+      "unit": "x",
+      "higher_is_better": false,
+      "source": "ratio debt_ratio"
+    }
+  },
+  "guardrails_note": "Absolute floors that override peer-relative points (conventional credit-analysis thresholds; e.g. Damodaran's synthetic-rating table assigns sub-investment-grade ratings below ~1.5-2x interest coverage, and loan covenants commonly cap net debt/EBITDA at 3-4x). A guardrail can only LOWER points, never raise them.",
+  "frameworks": {
+    "manufacturing": {
+      "label": "Manufacturing & industrials",
+      "sectors": [
+        "Industrials",
+        "Basic Materials"
+      ],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 25,
+          "metrics": {
+            "roce": 10,
+            "operating_margin": 8,
+            "fcf_margin": 7
+          }
+        },
+        "LIQUIDITY": {
+          "max": 20,
+          "metrics": {
+            "current_ratio": 10,
+            "ocf_to_current_liabilities": 10
+          }
+        },
+        "SOLVENCY": {
+          "max": 20,
+          "metrics": {
+            "interest_coverage": 10,
+            "debt_ratio": 10
+          }
+        },
+        "EFFICIENCY": {
+          "max": 15,
+          "metrics": {
+            "asset_turnover": 8,
+            "inventory_turnover": 7
+          }
+        },
+        "GROWTH": {
+          "max": 20,
+          "metrics": {
+            "revenue_cagr": 12,
+            "operating_income_cagr": 8
+          }
+        }
+      },
+      "guardrails": [
+        {
+          "metric": "interest_coverage",
+          "below": 1.0,
+          "cap": 0.0,
+          "reason": "earnings do not cover interest"
+        },
+        {
+          "metric": "interest_coverage",
+          "below": 1.5,
+          "cap": 0.1,
+          "reason": "earnings barely cover interest (< 1.5x)"
+        },
+        {
+          "metric": "current_ratio",
+          "below": 1.0,
+          "cap": 0.4,
+          "reason": "current liabilities exceed current assets"
+        },
+        {
+          "metric": "operating_margin",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "operating loss"
+        },
+        {
+          "metric": "roce",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "negative return on capital"
+        },
+        {
+          "metric": "debt_ratio",
+          "above": 1.0,
+          "cap": 0.0,
+          "reason": "liabilities exceed assets (negative equity)"
+        }
+      ]
+    },
+    "it_services": {
+      "label": "Information technology",
+      "sectors": [
+        "Technology"
+      ],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 25,
+          "metrics": {
+            "roce": 10,
+            "operating_margin": 8,
+            "fcf_margin": 7
+          }
+        },
+        "LIQUIDITY": {
+          "max": 20,
+          "metrics": {
+            "current_ratio": 10,
+            "ocf_to_current_liabilities": 10
+          }
+        },
+        "SOLVENCY": {
+          "max": 20,
+          "metrics": {
+            "interest_coverage": 10,
+            "debt_ratio": 10
+          }
+        },
+        "EFFICIENCY": {
+          "max": 15,
+          "metrics": {
+            "asset_turnover": 8,
+            "receivables_turnover": 7
+          }
+        },
+        "GROWTH": {
+          "max": 20,
+          "metrics": {
+            "revenue_cagr": 12,
+            "operating_income_cagr": 8
+          }
+        }
+      },
+      "efficiency_note": "IT and software companies carry little or no inventory; collection of receivables (days sales outstanding) is their working-capital driver, so receivables turnover replaces inventory turnover.",
+      "guardrails": [
+        {
+          "metric": "interest_coverage",
+          "below": 1.0,
+          "cap": 0.0,
+          "reason": "earnings do not cover interest"
+        },
+        {
+          "metric": "interest_coverage",
+          "below": 1.5,
+          "cap": 0.1,
+          "reason": "earnings barely cover interest (< 1.5x)"
+        },
+        {
+          "metric": "current_ratio",
+          "below": 1.0,
+          "cap": 0.4,
+          "reason": "current liabilities exceed current assets"
+        },
+        {
+          "metric": "operating_margin",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "operating loss"
+        },
+        {
+          "metric": "roce",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "negative return on capital"
+        },
+        {
+          "metric": "debt_ratio",
+          "above": 1.0,
+          "cap": 0.0,
+          "reason": "liabilities exceed assets (negative equity)"
+        }
+      ]
+    },
+    "energy": {
+      "label": "Energy (oil, gas, coal)",
+      "sectors": [
+        "Energy"
+      ],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 25,
+          "metrics": {
+            "roce": 10,
+            "operating_margin": 8,
+            "fcf_margin": 7
+          }
+        },
+        "LIQUIDITY": {
+          "max": 20,
+          "metrics": {
+            "current_ratio": 10,
+            "ocf_to_current_liabilities": 10
+          }
+        },
+        "SOLVENCY": {
+          "max": 20,
+          "metrics": {
+            "interest_coverage": 10,
+            "debt_ratio": 10
+          }
+        },
+        "EFFICIENCY": {
+          "max": 15,
+          "metrics": {
+            "asset_turnover": 8,
+            "inventory_turnover": 7
+          }
+        },
+        "GROWTH": {
+          "max": 20,
+          "metrics": {
+            "revenue_cagr": 12,
+            "operating_income_cagr": 8
+          }
+        }
+      },
+      "growth_note": "Energy revenue follows commodity prices: growth is scored against energy peers in the same years, never against technology companies.",
+      "guardrails": [
+        {
+          "metric": "interest_coverage",
+          "below": 1.0,
+          "cap": 0.0,
+          "reason": "earnings do not cover interest"
+        },
+        {
+          "metric": "interest_coverage",
+          "below": 1.5,
+          "cap": 0.1,
+          "reason": "earnings barely cover interest (< 1.5x)"
+        },
+        {
+          "metric": "operating_margin",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "operating loss"
+        },
+        {
+          "metric": "roce",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "negative return on capital"
+        },
+        {
+          "metric": "debt_ratio",
+          "above": 1.0,
+          "cap": 0.0,
+          "reason": "liabilities exceed assets (negative equity)"
+        }
+      ]
+    },
+    "utilities": {
+      "label": "Utilities (regulated, capital-intensive)",
+      "sectors": [
+        "Utilities"
+      ],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 25,
+          "metrics": {
+            "roce": 10,
+            "operating_margin": 8,
+            "fcf_margin": 7
+          }
+        },
+        "LIQUIDITY": {
+          "max": 20,
+          "metrics": {
+            "current_ratio": 8,
+            "ocf_to_current_liabilities": 12
+          }
+        },
+        "SOLVENCY": {
+          "max": 20,
+          "metrics": {
+            "interest_coverage": 10,
+            "debt_ratio": 10
+          }
+        },
+        "EFFICIENCY": {
+          "max": 15,
+          "metrics": {
+            "asset_turnover": 15
+          }
+        },
+        "GROWTH": {
+          "max": 20,
+          "metrics": {
+            "revenue_cagr": 12,
+            "operating_income_cagr": 8
+          }
+        }
+      },
+      "note": "Utilities run with high, stable leverage and current ratios below 1 (regulated cash flows), so leverage is judged against utility peers against utility peers and no current-ratio floor; free cash flow is often negative during capital programmes.",
+      "guardrails": [
+        {
+          "metric": "interest_coverage",
+          "below": 1.0,
+          "cap": 0.0,
+          "reason": "earnings do not cover interest"
+        },
+        {
+          "metric": "operating_margin",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "operating loss"
+        },
+        {
+          "metric": "debt_ratio",
+          "above": 1.0,
+          "cap": 0.0,
+          "reason": "liabilities exceed assets (negative equity)"
+        }
+      ]
+    },
+    "real_estate": {
+      "label": "Real estate",
+      "sectors": [
+        "Real Estate"
+      ],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 25,
+          "metrics": {
+            "roce": 10,
+            "operating_margin": 8,
+            "fcf_margin": 7
+          }
+        },
+        "LIQUIDITY": {
+          "max": 20,
+          "metrics": {
+            "current_ratio": 10,
+            "ocf_to_current_liabilities": 10
+          }
+        },
+        "SOLVENCY": {
+          "max": 20,
+          "metrics": {
+            "interest_coverage": 10,
+            "debt_ratio": 10
+          }
+        },
+        "EFFICIENCY": {
+          "max": 15,
+          "metrics": {
+            "asset_turnover": 15
+          }
+        },
+        "GROWTH": {
+          "max": 20,
+          "metrics": {
+            "revenue_cagr": 12,
+            "operating_income_cagr": 8
+          }
+        }
+      },
+      "note": "Property portfolios and project inventories turn over slowly by nature, so efficiency is asset turnover against real-estate peers only; high leverage is normal for REITs and developers and is judged against real-estate peers.",
+      "guardrails": [
+        {
+          "metric": "interest_coverage",
+          "below": 1.0,
+          "cap": 0.0,
+          "reason": "earnings do not cover interest"
+        },
+        {
+          "metric": "operating_margin",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "operating loss"
+        },
+        {
+          "metric": "debt_ratio",
+          "above": 1.0,
+          "cap": 0.0,
+          "reason": "liabilities exceed assets (negative equity)"
+        }
+      ]
+    },
+    "general": {
+      "label": "Other non-financial (consumer, healthcare, communication)",
+      "sectors": [
+        "Consumer Cyclical",
+        "Consumer Defensive",
+        "Healthcare",
+        "Communication Services"
+      ],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 25,
+          "metrics": {
+            "roce": 10,
+            "operating_margin": 8,
+            "fcf_margin": 7
+          }
+        },
+        "LIQUIDITY": {
+          "max": 20,
+          "metrics": {
+            "current_ratio": 10,
+            "ocf_to_current_liabilities": 10
+          }
+        },
+        "SOLVENCY": {
+          "max": 20,
+          "metrics": {
+            "interest_coverage": 10,
+            "debt_ratio": 10
+          }
+        },
+        "EFFICIENCY": {
+          "max": 15,
+          "metrics": {
+            "asset_turnover": 8,
+            "inventory_turnover": 7
+          }
+        },
+        "GROWTH": {
+          "max": 20,
+          "metrics": {
+            "revenue_cagr": 12,
+            "operating_income_cagr": 8
+          }
+        }
+      },
+      "guardrails": [
+        {
+          "metric": "interest_coverage",
+          "below": 1.0,
+          "cap": 0.0,
+          "reason": "earnings do not cover interest"
+        },
+        {
+          "metric": "interest_coverage",
+          "below": 1.5,
+          "cap": 0.1,
+          "reason": "earnings barely cover interest (< 1.5x)"
+        },
+        {
+          "metric": "current_ratio",
+          "below": 1.0,
+          "cap": 0.4,
+          "reason": "current liabilities exceed current assets"
+        },
+        {
+          "metric": "operating_margin",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "operating loss"
+        },
+        {
+          "metric": "roce",
+          "below": 0.0,
+          "cap": 0.1,
+          "reason": "negative return on capital"
+        },
+        {
+          "metric": "debt_ratio",
+          "above": 1.0,
+          "cap": 0.0,
+          "reason": "liabilities exceed assets (negative equity)"
+        }
+      ]
+    },
+    "banking": {
+      "label": "Banking",
+      "financial": true,
+      "industry_keywords": [
+        "bank"
+      ],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 35,
+          "metrics": {
+            "roa": 20,
+            "net_margin": 15
+          }
+        },
+        "LIQUIDITY": {
+          "max": 0,
+          "not_assessed": "Bank liquidity needs deposits, liquid assets and regulatory ratios (LCR/NSFR), which the data provider does not report. Working-capital ratios do not apply to banks."
+        },
+        "SOLVENCY": {
+          "max": 35,
+          "metrics": {
+            "equity_to_assets": 35
+          }
+        },
+        "EFFICIENCY": {
+          "max": 0,
+          "not_assessed": "Bank efficiency is measured by the cost-to-income ratio and asset quality (gross/net NPA, provision coverage), which the data provider does not report consistently."
+        },
+        "GROWTH": {
+          "max": 30,
+          "metrics": {
+            "revenue_cagr": 15,
+            "net_income_cagr": 15
+          }
+        }
+      },
+      "note": "Equity / total assets is a simple leverage-based capital buffer, not the regulatory capital adequacy ratio (CET1/CRAR, which risk-weights assets). Profitability uses ROA (the standard bank return measure) rather than ROE, which mostly reflects leverage.",
+      "guardrails": [
+        {
+          "metric": "roa",
+          "below": 0.0,
+          "cap": 0.0,
+          "reason": "the bank made a loss"
+        },
+        {
+          "metric": "equity_to_assets",
+          "below": 4.0,
+          "cap": 0.1,
+          "reason": "equity below 4% of assets (thin capital buffer)"
+        }
+      ]
+    },
+    "insurance": {
+      "label": "Insurance",
+      "financial": true,
+      "industry_keywords": [
+        "insurance"
+      ],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 35,
+          "metrics": {
+            "roe": 20,
+            "net_margin": 15
+          }
+        },
+        "LIQUIDITY": {
+          "max": 0,
+          "not_assessed": "Insurer liquidity depends on the duration match of investments and policy liabilities, which the data provider does not report."
+        },
+        "SOLVENCY": {
+          "max": 35,
+          "metrics": {
+            "equity_to_assets": 35
+          }
+        },
+        "EFFICIENCY": {
+          "max": 0,
+          "not_assessed": "Insurer efficiency is measured by the combined and expense ratios, which need premium and claims data the provider does not report."
+        },
+        "GROWTH": {
+          "max": 30,
+          "metrics": {
+            "revenue_cagr": 15,
+            "net_income_cagr": 15
+          }
+        }
+      },
+      "note": "Return on equity is the conventional insurer profitability measure; equity / assets approximates the solvency buffer, not the regulatory solvency ratio.",
+      "guardrails": [
+        {
+          "metric": "roe",
+          "below": 0.0,
+          "cap": 0.0,
+          "reason": "the insurer made a loss"
+        }
+      ]
+    },
+    "financial_services": {
+      "label": "Other financial services (NBFCs, capital markets, asset managers)",
+      "financial": true,
+      "industry_keywords": [],
+      "pillars": {
+        "PROFITABILITY": {
+          "max": 35,
+          "metrics": {
+            "roa": 20,
+            "net_margin": 15
+          }
+        },
+        "LIQUIDITY": {
+          "max": 0,
+          "not_assessed": "Lender and broker liquidity needs asset-liability maturity data the provider does not report."
+        },
+        "SOLVENCY": {
+          "max": 35,
+          "metrics": {
+            "equity_to_assets": 35
+          }
+        },
+        "EFFICIENCY": {
+          "max": 0,
+          "not_assessed": "Efficiency of lenders and asset managers (cost-to-income, credit costs, assets under management) is not reported by the provider."
+        },
+        "GROWTH": {
+          "max": 30,
+          "metrics": {
+            "revenue_cagr": 15,
+            "net_income_cagr": 15
+          }
+        }
+      },
+      "guardrails": [
+        {
+          "metric": "roa",
+          "below": 0.0,
+          "cap": 0.0,
+          "reason": "the company made a loss"
+        },
+        {
+          "metric": "equity_to_assets",
+          "below": 8.0,
+          "cap": 0.1,
+          "reason": "equity below 8% of assets for a non-bank lender"
+        }
+      ]
+    }
+  },
+  "default_framework": "general",
+  "benchmarks": {
+    "ALL:financial": {
+      "asset_turnover": {
+        "p1": 0.018257,
+        "p5": 0.032383,
+        "p10": 0.036053,
+        "p25": 0.044564,
+        "p50": 0.109347,
+        "p75": 0.268533,
+        "p90": 0.464061,
+        "p95": 0.583117,
+        "p99": 1.200981,
+        "n": 651
+      },
+      "current_ratio": {
+        "p1": 0.30162,
+        "p5": 0.80255,
+        "p10": 0.89685,
+        "p25": 1.063296,
+        "p50": 1.404802,
+        "p75": 2.906699,
+        "p90": 9.191901,
+        "p95": 14.304606,
+        "p99": 87.135746,
+        "n": 238
+      },
+      "debt_ratio": {
+        "p1": 0.064439,
+        "p5": 0.147331,
+        "p10": 0.410945,
+        "p25": 0.690423,
+        "p50": 0.822104,
+        "p75": 0.899315,
+        "p90": 0.929066,
+        "p95": 0.958855,
+        "p99": 0.987196,
+        "n": 650
+      },
+      "equity_to_assets": {
+        "p1": 2.606679,
+        "p5": 4.068504,
+        "p10": 6.886065,
+        "p25": 9.665573,
+        "p50": 16.930739,
+        "p75": 29.54875,
+        "p90": 56.175049,
+        "p95": 82.566786,
+        "p99": 92.539333,
+        "n": 645
+      },
+      "fcf_margin": {
+        "p1": -370.252731,
+        "p5": -216.533177,
+        "p10": -137.466365,
+        "p25": -32.274628,
+        "p50": 15.54888,
+        "p75": 32.724784,
+        "p90": 54.910412,
+        "p95": 70.874577,
+        "p99": 136.374946,
+        "n": 652
+      },
+      "interest_coverage": {
+        "p1": -20.028619,
+        "p5": 1.420264,
+        "p10": 1.987741,
+        "p25": 5.172595,
+        "p50": 13.969605,
+        "p75": 35.482062,
+        "p90": 220.883392,
+        "p95": 405.604159,
+        "p99": 4946.631902,
+        "n": 351
+      },
+      "inventory_turnover": {
+        "p1": 1.450644,
+        "p5": 1.454378,
+        "p10": 1.459046,
+        "p25": 1.47305,
+        "p50": 1.49639,
+        "p75": 1.519731,
+        "p90": 1.533735,
+        "p95": 1.538403,
+        "p99": 1.542137,
+        "n": 2
+      },
+      "net_debt_to_ebitda": {
+        "p1": -59.669782,
+        "p5": -7.932721,
+        "p10": -3.446459,
+        "p25": -0.913699,
+        "p50": 1.270875,
+        "p75": 5.381372,
+        "p90": 20.046212,
+        "p95": 27.897026,
+        "p99": 33.99689,
+        "n": 221
+      },
+      "net_income_cagr": {
+        "p1": -49.665978,
+        "p5": -23.958359,
+        "p10": -10.033349,
+        "p25": 5.566745,
+        "p50": 18.228836,
+        "p75": 33.141962,
+        "p90": 61.256538,
+        "p95": 92.073716,
+        "p99": 261.14232,
+        "n": 444
+      },
+      "net_margin": {
+        "p1": -23.398142,
+        "p5": 1.656837,
+        "p10": 5.482425,
+        "p25": 13.186755,
+        "p50": 23.239904,
+        "p75": 32.317831,
+        "p90": 54.954629,
+        "p95": 65.814401,
+        "p99": 118.637594,
+        "n": 651
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -17.781933,
+        "p5": -1.181087,
+        "p10": -0.870136,
+        "p25": -0.235992,
+        "p50": 0.13057,
+        "p75": 0.773743,
+        "p90": 2.513557,
+        "p95": 4.683503,
+        "p99": 6.961645,
+        "n": 238
+      },
+      "operating_income_cagr": {
+        "p1": -35.835116,
+        "p5": -5.530428,
+        "p10": 3.049382,
+        "p25": 11.592756,
+        "p50": 19.074668,
+        "p75": 31.794086,
+        "p90": 65.048517,
+        "p95": 128.265209,
+        "p99": 360.092137,
+        "n": 157
+      },
+      "operating_margin": {
+        "p1": -47.09538,
+        "p5": -1.953011,
+        "p10": 12.40673,
+        "p25": 21.917334,
+        "p50": 33.28916,
+        "p75": 54.137652,
+        "p90": 72.224913,
+        "p95": 79.381871,
+        "p99": 192.122421,
+        "n": 240
+      },
+      "receivables_turnover": {
+        "p1": 0.244653,
+        "p5": 0.674276,
+        "p10": 1.254778,
+        "p25": 2.679018,
+        "p50": 6.619872,
+        "p75": 31.505254,
+        "p90": 160.214599,
+        "p95": 345.155301,
+        "p99": 3875.296263,
+        "n": 404
+      },
+      "revenue_cagr": {
+        "p1": -7.147025,
+        "p5": -0.679126,
+        "p10": 2.165197,
+        "p25": 7.834312,
+        "p50": 13.843715,
+        "p75": 23.932645,
+        "p90": 40.906393,
+        "p95": 51.538942,
+        "p99": 163.869801,
+        "n": 487
+      },
+      "roa": {
+        "p1": -2.583723,
+        "p5": 0.251181,
+        "p10": 0.546458,
+        "p25": 1.02833,
+        "p50": 2.022876,
+        "p75": 4.501891,
+        "p90": 13.303677,
+        "p95": 21.596913,
+        "p99": 33.59304,
+        "n": 650
+      },
+      "roce": {
+        "p1": -26.086616,
+        "p5": 0.061856,
+        "p10": 2.829458,
+        "p25": 5.422276,
+        "p50": 13.238447,
+        "p75": 28.545579,
+        "p90": 42.641946,
+        "p95": 52.407242,
+        "p99": 90.456019,
+        "n": 238
+      },
+      "roe": {
+        "p1": -8.808612,
+        "p5": 1.557952,
+        "p10": 5.501417,
+        "p25": 10.01632,
+        "p50": 13.934287,
+        "p75": 19.39257,
+        "p90": 31.105198,
+        "p95": 43.076566,
+        "p99": 82.822145,
+        "n": 643
+      }
+    },
+    "ALL:non_financial": {
+      "asset_turnover": {
+        "p1": 0.086401,
+        "p5": 0.160851,
+        "p10": 0.228845,
+        "p25": 0.433902,
+        "p50": 0.692632,
+        "p75": 1.039309,
+        "p90": 1.506359,
+        "p95": 1.929609,
+        "p99": 3.148162,
+        "n": 3338
+      },
+      "current_ratio": {
+        "p1": 0.266342,
+        "p5": 0.550537,
+        "p10": 0.7181,
+        "p25": 1.028489,
+        "p50": 1.400691,
+        "p75": 2.120254,
+        "p90": 3.405561,
+        "p95": 4.639575,
+        "p99": 9.406741,
+        "n": 3334
+      },
+      "debt_ratio": {
+        "p1": 0.112439,
+        "p5": 0.187837,
+        "p10": 0.245062,
+        "p25": 0.37441,
+        "p50": 0.531624,
+        "p75": 0.6925,
+        "p90": 0.83435,
+        "p95": 0.965844,
+        "p99": 1.420578,
+        "n": 3342
+      },
+      "equity_to_assets": {
+        "p1": 3.430732,
+        "p5": 13.318595,
+        "p10": 20.400822,
+        "p25": 31.63351,
+        "p50": 47.050341,
+        "p75": 62.298883,
+        "p90": 75.467086,
+        "p95": 80.992187,
+        "p99": 88.420285,
+        "n": 3198
+      },
+      "fcf_margin": {
+        "p1": -84.459926,
+        "p5": -19.530559,
+        "p10": -8.288916,
+        "p25": 1.510508,
+        "p50": 8.386166,
+        "p75": 16.699644,
+        "p90": 27.932774,
+        "p95": 36.702014,
+        "p99": 61.668411,
+        "n": 3337
+      },
+      "interest_coverage": {
+        "p1": -13.552273,
+        "p5": 0.169977,
+        "p10": 1.63742,
+        "p25": 3.57069,
+        "p50": 8.425455,
+        "p75": 22.967457,
+        "p90": 77.236216,
+        "p95": 166.620405,
+        "p99": 859.733772,
+        "n": 3194
+      },
+      "inventory_turnover": {
+        "p1": 0.237491,
+        "p5": 1.046927,
+        "p10": 1.513241,
+        "p25": 2.651944,
+        "p50": 4.423017,
+        "p75": 8.017292,
+        "p90": 18.751796,
+        "p95": 31.436444,
+        "p99": 89.181827,
+        "n": 2631
+      },
+      "net_debt_to_ebitda": {
+        "p1": -8.699652,
+        "p5": -2.431864,
+        "p10": -1.299355,
+        "p25": -0.229652,
+        "p50": 1.179709,
+        "p75": 2.892346,
+        "p90": 5.414107,
+        "p95": 6.539133,
+        "p99": 17.730653,
+        "n": 3255
+      },
+      "net_income_cagr": {
+        "p1": -78.953929,
+        "p5": -41.567949,
+        "p10": -25.228764,
+        "p25": -3.325552,
+        "p50": 11.025507,
+        "p75": 30.938289,
+        "p90": 68.083742,
+        "p95": 119.768575,
+        "p99": 412.832243,
+        "n": 2188
+      },
+      "net_margin": {
+        "p1": -46.144992,
+        "p5": -3.713378,
+        "p10": 1.513341,
+        "p25": 5.52529,
+        "p50": 10.844353,
+        "p75": 17.516864,
+        "p90": 26.412609,
+        "p95": 32.699939,
+        "p99": 51.004504,
+        "n": 3340
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.449312,
+        "p5": -0.02548,
+        "p10": 0.062616,
+        "p25": 0.249905,
+        "p50": 0.471971,
+        "p75": 0.792498,
+        "p90": 1.285852,
+        "p95": 1.739356,
+        "p99": 3.053368,
+        "n": 3328
+      },
+      "operating_income_cagr": {
+        "p1": -64.092639,
+        "p5": -33.399343,
+        "p10": -17.975692,
+        "p25": -0.948903,
+        "p50": 11.345154,
+        "p75": 25.69002,
+        "p90": 50.759266,
+        "p95": 81.403511,
+        "p99": 230.465586,
+        "n": 2289
+      },
+      "operating_margin": {
+        "p1": -30.535189,
+        "p5": -0.128702,
+        "p10": 3.999736,
+        "p25": 8.825488,
+        "p50": 15.374322,
+        "p75": 22.876252,
+        "p90": 32.936784,
+        "p95": 40.971733,
+        "p99": 57.996708,
+        "n": 3332
+      },
+      "receivables_turnover": {
+        "p1": 1.7535,
+        "p5": 3.087283,
+        "p10": 3.947645,
+        "p25": 5.404012,
+        "p50": 7.686063,
+        "p75": 14.39585,
+        "p90": 31.305577,
+        "p95": 63.633061,
+        "p99": 359.638437,
+        "n": 3292
+      },
+      "revenue_cagr": {
+        "p1": -33.741351,
+        "p5": -12.579224,
+        "p10": -6.510937,
+        "p25": 0.935281,
+        "p50": 7.340944,
+        "p75": 15.450161,
+        "p90": 26.029308,
+        "p95": 37.718978,
+        "p99": 100.758047,
+        "n": 2498
+      },
+      "roa": {
+        "p1": -19.33186,
+        "p5": -1.729213,
+        "p10": 0.925147,
+        "p25": 3.483538,
+        "p50": 7.097145,
+        "p75": 12.320221,
+        "p90": 17.858441,
+        "p95": 22.392017,
+        "p99": 34.474416,
+        "n": 3338
+      },
+      "roce": {
+        "p1": -21.229129,
+        "p5": 0.294382,
+        "p10": 3.810655,
+        "p25": 7.961364,
+        "p50": 14.922934,
+        "p75": 23.372224,
+        "p90": 34.747984,
+        "p95": 43.564118,
+        "p99": 69.414679,
+        "n": 3319
+      },
+      "roe": {
+        "p1": -43.727327,
+        "p5": -3.138414,
+        "p10": 2.631357,
+        "p25": 8.929177,
+        "p50": 15.736708,
+        "p75": 26.143607,
+        "p90": 42.749274,
+        "p95": 61.817981,
+        "p99": 193.163834,
+        "n": 3182
+      }
+    },
+    "FW:banking": {
+      "asset_turnover": {
+        "p1": 0.025772,
+        "p5": 0.031908,
+        "p10": 0.032973,
+        "p25": 0.037082,
+        "p50": 0.041342,
+        "p75": 0.046651,
+        "p90": 0.071127,
+        "p95": 0.078321,
+        "p99": 0.083053,
+        "n": 160
+      },
+      "debt_ratio": {
+        "p1": 0.820329,
+        "p5": 0.852797,
+        "p10": 0.873633,
+        "p25": 0.886688,
+        "p50": 0.903135,
+        "p75": 0.920428,
+        "p90": 0.929247,
+        "p95": 0.93538,
+        "p99": 0.940031,
+        "n": 160
+      },
+      "equity_to_assets": {
+        "p1": 5.958466,
+        "p5": 6.454136,
+        "p10": 7.065641,
+        "p25": 7.92559,
+        "p50": 9.585638,
+        "p75": 11.28359,
+        "p90": 12.55716,
+        "p95": 14.682211,
+        "p99": 17.967085,
+        "n": 160
+      },
+      "fcf_margin": {
+        "p1": -130.030021,
+        "p5": -74.749411,
+        "p10": -40.720371,
+        "p25": -7.077106,
+        "p50": 26.148829,
+        "p75": 45.628548,
+        "p90": 61.989974,
+        "p95": 85.315654,
+        "p99": 112.326765,
+        "n": 160
+      },
+      "net_income_cagr": {
+        "p1": -48.148092,
+        "p5": -18.405178,
+        "p10": -9.425112,
+        "p25": -0.860301,
+        "p50": 19.217181,
+        "p75": 35.610777,
+        "p90": 56.618309,
+        "p95": 71.394301,
+        "p99": 141.981707,
+        "n": 118
+      },
+      "net_margin": {
+        "p1": 0.586542,
+        "p5": 8.349549,
+        "p10": 13.764291,
+        "p25": 19.509469,
+        "p50": 26.453421,
+        "p75": 30.212893,
+        "p90": 33.136805,
+        "p95": 34.987777,
+        "p99": 43.226489,
+        "n": 160
+      },
+      "receivables_turnover": {
+        "p1": 0.946496,
+        "p5": 1.038396,
+        "p10": 1.28992,
+        "p25": 1.501286,
+        "p50": 2.766761,
+        "p75": 8.940622,
+        "p90": 11.518707,
+        "p95": 13.168854,
+        "p99": 13.800293,
+        "n": 41
+      },
+      "revenue_cagr": {
+        "p1": -17.141887,
+        "p5": -0.581027,
+        "p10": 1.042679,
+        "p25": 5.15298,
+        "p50": 11.060262,
+        "p75": 17.410982,
+        "p90": 24.032353,
+        "p95": 30.844808,
+        "p99": 47.3857,
+        "n": 120
+      },
+      "roa": {
+        "p1": 0.060456,
+        "p5": 0.432094,
+        "p10": 0.536664,
+        "p25": 0.81091,
+        "p50": 1.067449,
+        "p75": 1.352769,
+        "p90": 1.740232,
+        "p95": 1.961473,
+        "p99": 2.495221,
+        "n": 160
+      },
+      "roe": {
+        "p1": 0.40135,
+        "p5": 4.221721,
+        "p10": 6.201931,
+        "p25": 8.728533,
+        "p50": 11.883405,
+        "p75": 14.903342,
+        "p90": 17.056416,
+        "p95": 17.764463,
+        "p99": 22.723636,
+        "n": 160
+      }
+    },
+    "FW:energy": {
+      "asset_turnover": {
+        "p1": 0.129388,
+        "p5": 0.205673,
+        "p10": 0.227161,
+        "p25": 0.497571,
+        "p50": 0.711541,
+        "p75": 1.552614,
+        "p90": 2.27497,
+        "p95": 2.663345,
+        "p99": 3.673073,
+        "n": 144
+      },
+      "current_ratio": {
+        "p1": 0.389521,
+        "p5": 0.556234,
+        "p10": 0.671243,
+        "p25": 0.827247,
+        "p50": 1.165372,
+        "p75": 1.601685,
+        "p90": 2.437562,
+        "p95": 4.129003,
+        "p99": 9.938222,
+        "n": 144
+      },
+      "debt_ratio": {
+        "p1": 0.09934,
+        "p5": 0.191588,
+        "p10": 0.34959,
+        "p25": 0.421905,
+        "p50": 0.542073,
+        "p75": 0.627403,
+        "p90": 0.727378,
+        "p95": 0.755984,
+        "p99": 0.844146,
+        "n": 144
+      },
+      "equity_to_assets": {
+        "p1": 11.730876,
+        "p5": 20.029953,
+        "p10": 23.610046,
+        "p25": 35.551476,
+        "p50": 42.779577,
+        "p75": 54.679567,
+        "p90": 63.725507,
+        "p95": 80.8412,
+        "p99": 90.066038,
+        "n": 144
+      },
+      "fcf_margin": {
+        "p1": -41.088724,
+        "p5": -7.111247,
+        "p10": -2.694642,
+        "p25": 3.207268,
+        "p50": 7.335291,
+        "p75": 15.636035,
+        "p90": 22.948602,
+        "p95": 28.18093,
+        "p99": 58.143912,
+        "n": 144
+      },
+      "interest_coverage": {
+        "p1": -2.169179,
+        "p5": 1.717225,
+        "p10": 3.132595,
+        "p25": 5.115282,
+        "p50": 9.827029,
+        "p75": 22.013514,
+        "p90": 68.226491,
+        "p95": 142.795491,
+        "p99": 589.676954,
+        "n": 137
+      },
+      "inventory_turnover": {
+        "p1": 1.659793,
+        "p5": 2.159242,
+        "p10": 4.409595,
+        "p25": 6.208355,
+        "p50": 11.288056,
+        "p75": 18.045741,
+        "p90": 36.655061,
+        "p95": 43.787325,
+        "p99": 53.233896,
+        "n": 125
+      },
+      "net_debt_to_ebitda": {
+        "p1": -1.313966,
+        "p5": -0.879869,
+        "p10": -0.540571,
+        "p25": 0.490099,
+        "p50": 1.065129,
+        "p75": 2.555982,
+        "p90": 4.660059,
+        "p95": 5.0638,
+        "p99": 7.376257,
+        "n": 143
+      },
+      "net_income_cagr": {
+        "p1": -75.657081,
+        "p5": -53.255272,
+        "p10": -50.519905,
+        "p25": -28.34241,
+        "p50": -3.17528,
+        "p75": 11.89215,
+        "p90": 41.102075,
+        "p95": 68.142075,
+        "p99": 349.759916,
+        "n": 98
+      },
+      "net_margin": {
+        "p1": -2.311647,
+        "p5": 1.227605,
+        "p10": 2.251091,
+        "p25": 5.819422,
+        "p50": 10.765497,
+        "p75": 19.675378,
+        "p90": 32.192869,
+        "p95": 36.276808,
+        "p99": 64.277315,
+        "n": 144
+      },
+      "ocf_to_current_liabilities": {
+        "p1": 0.06376,
+        "p5": 0.155385,
+        "p10": 0.257881,
+        "p25": 0.416021,
+        "p50": 0.767822,
+        "p75": 1.328542,
+        "p90": 2.047668,
+        "p95": 2.675308,
+        "p99": 7.676814,
+        "n": 144
+      },
+      "operating_income_cagr": {
+        "p1": -80.793299,
+        "p5": -57.372291,
+        "p10": -40.003234,
+        "p25": -29.541366,
+        "p50": -3.505323,
+        "p75": 16.676731,
+        "p90": 39.479522,
+        "p95": 57.408077,
+        "p99": 135.382593,
+        "n": 104
+      },
+      "operating_margin": {
+        "p1": -1.070605,
+        "p5": 2.604641,
+        "p10": 4.356456,
+        "p25": 8.620062,
+        "p50": 16.206161,
+        "p75": 30.549843,
+        "p90": 40.356393,
+        "p95": 53.895262,
+        "p99": 76.71042,
+        "n": 144
+      },
+      "receivables_turnover": {
+        "p1": 4.1654,
+        "p5": 4.587196,
+        "p10": 5.352076,
+        "p25": 8.328062,
+        "p50": 10.618447,
+        "p75": 15.107431,
+        "p90": 44.119233,
+        "p95": 58.4225,
+        "p99": 223.905426,
+        "n": 144
+      },
+      "revenue_cagr": {
+        "p1": -39.074109,
+        "p5": -29.172977,
+        "p10": -21.72367,
+        "p25": -12.737997,
+        "p50": -6.744779,
+        "p75": 0.691799,
+        "p90": 10.633192,
+        "p95": 15.531522,
+        "p99": 48.593507,
+        "n": 108
+      },
+      "roa": {
+        "p1": -2.681684,
+        "p5": 1.289446,
+        "p10": 2.781541,
+        "p25": 4.596193,
+        "p50": 7.507822,
+        "p75": 13.837705,
+        "p90": 18.859162,
+        "p95": 26.622946,
+        "p99": 38.974232,
+        "n": 144
+      },
+      "roce": {
+        "p1": -1.632482,
+        "p5": 4.910665,
+        "p10": 6.723084,
+        "p25": 10.150355,
+        "p50": 14.403166,
+        "p75": 24.115853,
+        "p90": 35.608668,
+        "p95": 50.262998,
+        "p99": 59.254976,
+        "n": 144
+      },
+      "roe": {
+        "p1": -4.672194,
+        "p5": 4.052568,
+        "p10": 7.568511,
+        "p25": 11.506669,
+        "p50": 17.963902,
+        "p75": 29.523979,
+        "p90": 44.79501,
+        "p95": 52.350368,
+        "p99": 134.95792,
+        "n": 144
+      }
+    },
+    "FW:financial_services": {
+      "asset_turnover": {
+        "p1": 0.013421,
+        "p5": 0.031234,
+        "p10": 0.037616,
+        "p25": 0.066927,
+        "p50": 0.131513,
+        "p75": 0.261005,
+        "p90": 0.500533,
+        "p95": 0.576693,
+        "p99": 1.11375,
+        "n": 357
+      },
+      "current_ratio": {
+        "p1": 0.283866,
+        "p5": 0.794586,
+        "p10": 0.861447,
+        "p25": 1.078014,
+        "p50": 1.469479,
+        "p75": 3.024442,
+        "p90": 10.057972,
+        "p95": 14.871859,
+        "p99": 92.268095,
+        "n": 214
+      },
+      "debt_ratio": {
+        "p1": 0.034098,
+        "p5": 0.089167,
+        "p10": 0.170162,
+        "p25": 0.551358,
+        "p50": 0.769542,
+        "p75": 0.863576,
+        "p90": 0.905082,
+        "p95": 0.927607,
+        "p99": 1.047159,
+        "n": 356
+      },
+      "equity_to_assets": {
+        "p1": 2.670258,
+        "p5": 5.777118,
+        "p10": 7.913826,
+        "p25": 12.650742,
+        "p50": 22.616328,
+        "p75": 42.775863,
+        "p90": 81.093681,
+        "p95": 89.923124,
+        "p99": 93.166236,
+        "n": 353
+      },
+      "fcf_margin": {
+        "p1": -438.110905,
+        "p5": -262.55731,
+        "p10": -206.963275,
+        "p25": -100.065389,
+        "p50": 9.077368,
+        "p75": 34.02772,
+        "p90": 58.219159,
+        "p95": 78.776558,
+        "p99": 148.554182,
+        "n": 358
+      },
+      "interest_coverage": {
+        "p1": -28.006348,
+        "p5": 1.320506,
+        "p10": 1.883563,
+        "p25": 2.871767,
+        "p50": 14.883107,
+        "p75": 65.986182,
+        "p90": 253.239587,
+        "p95": 754.398817,
+        "p99": 6497.261873,
+        "n": 224
+      },
+      "inventory_turnover": {
+        "p1": 1.450644,
+        "p5": 1.454378,
+        "p10": 1.459046,
+        "p25": 1.47305,
+        "p50": 1.49639,
+        "p75": 1.519731,
+        "p90": 1.533735,
+        "p95": 1.538403,
+        "p99": 1.542137,
+        "n": 2
+      },
+      "net_debt_to_ebitda": {
+        "p1": -67.115496,
+        "p5": -8.528143,
+        "p10": -3.507649,
+        "p25": -1.039268,
+        "p50": 0.638114,
+        "p75": 6.75107,
+        "p90": 22.850074,
+        "p95": 27.982135,
+        "p99": 34.209751,
+        "n": 197
+      },
+      "net_income_cagr": {
+        "p1": -45.962715,
+        "p5": -25.66889,
+        "p10": -15.798652,
+        "p25": 7.945642,
+        "p50": 19.666044,
+        "p75": 33.110878,
+        "p90": 63.319548,
+        "p95": 103.575267,
+        "p99": 261.305705,
+        "n": 243
+      },
+      "net_margin": {
+        "p1": -50.14726,
+        "p5": 5.483175,
+        "p10": 8.136279,
+        "p25": 16.423277,
+        "p50": 27.163624,
+        "p75": 45.589266,
+        "p90": 65.01089,
+        "p95": 78.513854,
+        "p99": 147.310305,
+        "n": 357
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -19.365521,
+        "p5": -1.252145,
+        "p10": -0.872031,
+        "p25": -0.263502,
+        "p50": 0.133651,
+        "p75": 0.789743,
+        "p90": 2.713225,
+        "p95": 4.829296,
+        "p99": 7.259174,
+        "n": 214
+      },
+      "operating_income_cagr": {
+        "p1": -36.305854,
+        "p5": -11.316383,
+        "p10": 1.464732,
+        "p25": 11.595944,
+        "p50": 20.633144,
+        "p75": 33.77683,
+        "p90": 68.792211,
+        "p95": 131.187437,
+        "p99": 375.779817,
+        "n": 142
+      },
+      "operating_margin": {
+        "p1": -49.331659,
+        "p5": -0.573472,
+        "p10": 13.191618,
+        "p25": 23.737392,
+        "p50": 36.988094,
+        "p75": 56.762857,
+        "p90": 74.080697,
+        "p95": 79.70595,
+        "p99": 201.210188,
+        "n": 216
+      },
+      "receivables_turnover": {
+        "p1": 0.176697,
+        "p5": 0.392711,
+        "p10": 0.716163,
+        "p25": 4.464425,
+        "p50": 10.876331,
+        "p75": 51.352003,
+        "p90": 232.136295,
+        "p95": 1051.732106,
+        "p99": 10750.371957,
+        "n": 236
+      },
+      "revenue_cagr": {
+        "p1": -4.956743,
+        "p5": -0.010049,
+        "p10": 4.588424,
+        "p25": 10.006235,
+        "p50": 18.039744,
+        "p75": 30.901367,
+        "p90": 48.699926,
+        "p95": 67.910183,
+        "p99": 423.115543,
+        "n": 267
+      },
+      "roa": {
+        "p1": -3.591314,
+        "p5": 0.40789,
+        "p10": 0.822501,
+        "p25": 1.618606,
+        "p50": 2.9382,
+        "p75": 7.378454,
+        "p90": 21.312029,
+        "p95": 27.131206,
+        "p99": 57.794986,
+        "n": 356
+      },
+      "roce": {
+        "p1": -30.829568,
+        "p5": 0.057474,
+        "p10": 2.905273,
+        "p25": 5.152771,
+        "p50": 13.316143,
+        "p75": 29.687227,
+        "p90": 45.691943,
+        "p95": 56.249528,
+        "p99": 93.735615,
+        "n": 214
+      },
+      "roe": {
+        "p1": -32.216998,
+        "p5": 1.277994,
+        "p10": 5.747548,
+        "p25": 11.062996,
+        "p50": 15.733452,
+        "p75": 22.757899,
+        "p90": 36.850194,
+        "p95": 55.607911,
+        "p99": 141.508019,
+        "n": 352
+      }
+    },
+    "FW:general": {
+      "asset_turnover": {
+        "p1": 0.135223,
+        "p5": 0.293952,
+        "p10": 0.366295,
+        "p25": 0.528307,
+        "p50": 0.774378,
+        "p75": 1.163156,
+        "p90": 1.738288,
+        "p95": 2.343362,
+        "p99": 3.677909,
+        "n": 1286
+      },
+      "current_ratio": {
+        "p1": 0.228651,
+        "p5": 0.552099,
+        "p10": 0.729127,
+        "p25": 1.043667,
+        "p50": 1.413905,
+        "p75": 2.088496,
+        "p90": 3.444525,
+        "p95": 4.836918,
+        "p99": 11.182324,
+        "n": 1280
+      },
+      "debt_ratio": {
+        "p1": 0.100833,
+        "p5": 0.162044,
+        "p10": 0.229106,
+        "p25": 0.35675,
+        "p50": 0.532172,
+        "p75": 0.700624,
+        "p90": 0.898704,
+        "p95": 1.045975,
+        "p99": 1.4843,
+        "n": 1288
+      },
+      "equity_to_assets": {
+        "p1": 1.560186,
+        "p5": 10.66477,
+        "p10": 19.688903,
+        "p25": 32.18649,
+        "p50": 47.707633,
+        "p75": 64.699361,
+        "p90": 77.111121,
+        "p95": 83.384266,
+        "p99": 89.739047,
+        "n": 1205
+      },
+      "fcf_margin": {
+        "p1": -40.897678,
+        "p5": -8.619096,
+        "p10": -2.057515,
+        "p25": 3.040963,
+        "p50": 8.872136,
+        "p75": 15.623765,
+        "p90": 22.95029,
+        "p95": 30.952779,
+        "p99": 46.334475,
+        "n": 1286
+      },
+      "interest_coverage": {
+        "p1": -25.183438,
+        "p5": -0.530113,
+        "p10": 1.461318,
+        "p25": 3.91912,
+        "p50": 8.650526,
+        "p75": 22.652338,
+        "p90": 81.240963,
+        "p95": 177.332955,
+        "p99": 887.90572,
+        "n": 1219
+      },
+      "inventory_turnover": {
+        "p1": 0.720417,
+        "p5": 1.152992,
+        "p10": 1.444213,
+        "p25": 2.39279,
+        "p50": 4.310854,
+        "p75": 7.519605,
+        "p90": 18.296284,
+        "p95": 29.165335,
+        "p99": 50.914156,
+        "n": 1059
+      },
+      "net_debt_to_ebitda": {
+        "p1": -6.659299,
+        "p5": -2.193739,
+        "p10": -1.190721,
+        "p25": -0.199747,
+        "p50": 1.170644,
+        "p75": 2.689424,
+        "p90": 4.185771,
+        "p95": 5.450368,
+        "p99": 19.520489,
+        "n": 1252
+      },
+      "net_income_cagr": {
+        "p1": -81.22447,
+        "p5": -34.919404,
+        "p10": -20.624866,
+        "p25": -1.673477,
+        "p50": 12.720009,
+        "p75": 30.714486,
+        "p90": 73.315445,
+        "p95": 120.561863,
+        "p99": 332.851358,
+        "n": 834
+      },
+      "net_margin": {
+        "p1": -69.822921,
+        "p5": -8.474321,
+        "p10": 0.670225,
+        "p25": 4.342498,
+        "p50": 9.679191,
+        "p75": 16.151658,
+        "p90": 23.804804,
+        "p95": 28.453025,
+        "p99": 42.933419,
+        "n": 1287
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.596625,
+        "p5": 0.01469,
+        "p10": 0.10611,
+        "p25": 0.274591,
+        "p50": 0.486921,
+        "p75": 0.773001,
+        "p90": 1.194186,
+        "p95": 1.475201,
+        "p99": 2.491853,
+        "n": 1278
+      },
+      "operating_income_cagr": {
+        "p1": -56.075809,
+        "p5": -24.857673,
+        "p10": -14.109263,
+        "p25": -0.651385,
+        "p50": 10.967115,
+        "p75": 24.280273,
+        "p90": 40.443582,
+        "p95": 58.965978,
+        "p99": 178.567365,
+        "n": 867
+      },
+      "operating_margin": {
+        "p1": -33.576035,
+        "p5": -0.803022,
+        "p10": 2.919115,
+        "p25": 8.368448,
+        "p50": 14.818064,
+        "p75": 21.564773,
+        "p90": 29.864397,
+        "p95": 34.782231,
+        "p99": 48.309397,
+        "n": 1279
+      },
+      "receivables_turnover": {
+        "p1": 2.220033,
+        "p5": 3.385227,
+        "p10": 4.12153,
+        "p25": 5.710906,
+        "p50": 9.104235,
+        "p75": 19.891043,
+        "p90": 51.067776,
+        "p95": 101.187074,
+        "p99": 512.068377,
+        "n": 1265
+      },
+      "revenue_cagr": {
+        "p1": -20.743182,
+        "p5": -6.234609,
+        "p10": -1.776245,
+        "p25": 2.735451,
+        "p50": 8.179815,
+        "p75": 16.267321,
+        "p90": 25.693827,
+        "p95": 35.323541,
+        "p99": 80.08152,
+        "n": 963
+      },
+      "roa": {
+        "p1": -29.099334,
+        "p5": -5.26223,
+        "p10": 0.689661,
+        "p25": 3.763998,
+        "p50": 7.627139,
+        "p75": 12.909861,
+        "p90": 18.8293,
+        "p95": 22.660619,
+        "p99": 31.712859,
+        "n": 1286
+      },
+      "roce": {
+        "p1": -39.640084,
+        "p5": -1.717858,
+        "p10": 3.640622,
+        "p25": 9.013668,
+        "p50": 15.909624,
+        "p75": 23.581247,
+        "p90": 35.292928,
+        "p95": 45.212239,
+        "p99": 63.229347,
+        "n": 1274
+      },
+      "roe": {
+        "p1": -72.486403,
+        "p5": -8.23721,
+        "p10": 1.760998,
+        "p25": 9.291858,
+        "p50": 16.785094,
+        "p75": 27.355646,
+        "p90": 45.674757,
+        "p95": 68.151362,
+        "p99": 285.776281,
+        "n": 1198
+      }
+    },
+    "FW:insurance": {
+      "asset_turnover": {
+        "p1": 0.063853,
+        "p5": 0.099346,
+        "p10": 0.150798,
+        "p25": 0.21719,
+        "p50": 0.299608,
+        "p75": 0.377957,
+        "p90": 0.637229,
+        "p95": 0.81896,
+        "p99": 1.379695,
+        "n": 134
+      },
+      "current_ratio": {
+        "p1": 1.006256,
+        "p5": 1.019234,
+        "p10": 1.024529,
+        "p25": 1.042916,
+        "p50": 1.09175,
+        "p75": 1.200485,
+        "p90": 4.910125,
+        "p95": 7.128641,
+        "p99": 7.856308,
+        "n": 24
+      },
+      "debt_ratio": {
+        "p1": 0.132719,
+        "p5": 0.344164,
+        "p10": 0.601624,
+        "p25": 0.706541,
+        "p50": 0.781278,
+        "p75": 0.896735,
+        "p90": 0.962759,
+        "p95": 0.970024,
+        "p99": 1.005448,
+        "n": 134
+      },
+      "equity_to_assets": {
+        "p1": 1.770772,
+        "p5": 2.88093,
+        "p10": 3.789943,
+        "p25": 12.701833,
+        "p50": 21.747567,
+        "p75": 29.511387,
+        "p90": 40.132545,
+        "p95": 65.842724,
+        "p99": 86.68633,
+        "n": 132
+      },
+      "fcf_margin": {
+        "p1": -14.098623,
+        "p5": -8.136382,
+        "p10": -0.39055,
+        "p25": 9.350416,
+        "p50": 16.379243,
+        "p75": 22.394051,
+        "p90": 26.563871,
+        "p95": 31.195095,
+        "p99": 39.155617,
+        "n": 134
+      },
+      "interest_coverage": {
+        "p1": -10.511962,
+        "p5": 3.322493,
+        "p10": 4.905415,
+        "p25": 7.368989,
+        "p50": 12.775367,
+        "p75": 24.707719,
+        "p90": 81.303086,
+        "p95": 217.461116,
+        "p99": 458.017438,
+        "n": 127
+      },
+      "net_debt_to_ebitda": {
+        "p1": -18.370484,
+        "p5": -3.403795,
+        "p10": -0.336448,
+        "p25": 1.367233,
+        "p50": 2.234563,
+        "p75": 2.642387,
+        "p90": 3.034798,
+        "p95": 3.253475,
+        "p99": 3.573539,
+        "n": 24
+      },
+      "net_income_cagr": {
+        "p1": -65.440075,
+        "p5": -13.753849,
+        "p10": -6.85042,
+        "p25": 5.352632,
+        "p50": 15.007998,
+        "p75": 30.942775,
+        "p90": 69.831892,
+        "p95": 148.372501,
+        "p99": 343.476724,
+        "n": 83
+      },
+      "net_margin": {
+        "p1": -8.961826,
+        "p5": -0.561353,
+        "p10": 1.150823,
+        "p25": 2.840942,
+        "p50": 9.740452,
+        "p75": 16.120291,
+        "p90": 20.585221,
+        "p95": 22.216155,
+        "p99": 31.77745,
+        "n": 134
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.473886,
+        "p5": -0.204905,
+        "p10": 0.022586,
+        "p25": 0.063693,
+        "p50": 0.129367,
+        "p75": 0.187368,
+        "p90": 0.211711,
+        "p95": 0.219616,
+        "p99": 0.244182,
+        "n": 24
+      },
+      "operating_income_cagr": {
+        "p1": 6.908386,
+        "p5": 7.158155,
+        "p10": 7.844085,
+        "p25": 12.438953,
+        "p50": 15.966675,
+        "p75": 18.043183,
+        "p90": 19.685708,
+        "p95": 21.068289,
+        "p99": 22.956855,
+        "n": 15
+      },
+      "operating_margin": {
+        "p1": -23.666245,
+        "p5": -6.833103,
+        "p10": 1.642791,
+        "p25": 18.433551,
+        "p50": 22.302582,
+        "p75": 26.937861,
+        "p90": 28.597048,
+        "p95": 29.268417,
+        "p99": 29.379504,
+        "n": 24
+      },
+      "receivables_turnover": {
+        "p1": 1.05834,
+        "p5": 1.318407,
+        "p10": 1.674016,
+        "p25": 2.136811,
+        "p50": 3.515426,
+        "p75": 9.46507,
+        "p90": 77.520833,
+        "p95": 141.400665,
+        "p99": 577.667818,
+        "n": 127
+      },
+      "revenue_cagr": {
+        "p1": -4.798269,
+        "p5": -3.251721,
+        "p10": 2.248078,
+        "p25": 7.238432,
+        "p50": 11.701662,
+        "p75": 17.820433,
+        "p90": 34.342663,
+        "p95": 39.90369,
+        "p99": 82.915363,
+        "n": 100
+      },
+      "roa": {
+        "p1": -2.148235,
+        "p5": -0.205042,
+        "p10": 0.280982,
+        "p25": 0.788883,
+        "p50": 3.0957,
+        "p75": 4.715519,
+        "p90": 7.746389,
+        "p95": 8.78044,
+        "p99": 18.598821,
+        "n": 134
+      },
+      "roce": {
+        "p1": -5.896979,
+        "p5": 1.835667,
+        "p10": 3.575318,
+        "p25": 8.064508,
+        "p50": 10.596963,
+        "p75": 17.804827,
+        "p90": 21.792122,
+        "p95": 27.751769,
+        "p99": 29.378259,
+        "n": 24
+      },
+      "roe": {
+        "p1": -6.774614,
+        "p5": -1.094495,
+        "p10": 4.543452,
+        "p25": 9.32797,
+        "p50": 13.312912,
+        "p75": 20.316809,
+        "p90": 28.674134,
+        "p95": 37.397364,
+        "p99": 58.739958,
+        "n": 131
+      }
+    },
+    "FW:it_services": {
+      "asset_turnover": {
+        "p1": 0.154874,
+        "p5": 0.241208,
+        "p10": 0.317446,
+        "p25": 0.468251,
+        "p50": 0.695095,
+        "p75": 1.051754,
+        "p90": 1.38765,
+        "p95": 1.594601,
+        "p99": 2.986782,
+        "n": 511
+      },
+      "current_ratio": {
+        "p1": 0.490331,
+        "p5": 0.762339,
+        "p10": 0.902924,
+        "p25": 1.110204,
+        "p50": 1.615074,
+        "p75": 2.561758,
+        "p90": 3.872324,
+        "p95": 5.10071,
+        "p99": 6.522492,
+        "n": 511
+      },
+      "debt_ratio": {
+        "p1": 0.159702,
+        "p5": 0.197034,
+        "p10": 0.258521,
+        "p25": 0.353976,
+        "p50": 0.479237,
+        "p75": 0.678472,
+        "p90": 0.878682,
+        "p95": 0.986518,
+        "p99": 1.86715,
+        "n": 511
+      },
+      "equity_to_assets": {
+        "p1": 3.06297,
+        "p5": 11.716144,
+        "p10": 16.737263,
+        "p25": 34.811227,
+        "p50": 52.861999,
+        "p75": 64.754457,
+        "p90": 75.113977,
+        "p95": 80.353138,
+        "p99": 83.951616,
+        "n": 488
+      },
+      "fcf_margin": {
+        "p1": -45.902216,
+        "p5": -14.774449,
+        "p10": -4.260032,
+        "p25": 6.347973,
+        "p50": 15.672338,
+        "p75": 26.044096,
+        "p90": 32.957031,
+        "p95": 39.012965,
+        "p99": 54.076463,
+        "n": 513
+      },
+      "interest_coverage": {
+        "p1": -46.437775,
+        "p5": -3.01048,
+        "p10": 1.593045,
+        "p25": 5.362458,
+        "p50": 12.995985,
+        "p75": 32.665999,
+        "p90": 64.725952,
+        "p95": 107.698902,
+        "p99": 537.100309,
+        "n": 472
+      },
+      "inventory_turnover": {
+        "p1": 1.239068,
+        "p5": 1.558994,
+        "p10": 1.937862,
+        "p25": 2.587592,
+        "p50": 3.585767,
+        "p75": 5.865569,
+        "p90": 17.328421,
+        "p95": 24.951412,
+        "p99": 43.120304,
+        "n": 284
+      },
+      "net_debt_to_ebitda": {
+        "p1": -23.431256,
+        "p5": -2.638437,
+        "p10": -1.571143,
+        "p25": -0.674746,
+        "p50": 0.154843,
+        "p75": 1.55729,
+        "p90": 2.970589,
+        "p95": 3.994972,
+        "p99": 8.149353,
+        "n": 494
+      },
+      "net_income_cagr": {
+        "p1": -60.038868,
+        "p5": -31.287718,
+        "p10": -19.060042,
+        "p25": -0.880903,
+        "p50": 9.496075,
+        "p75": 27.995541,
+        "p90": 78.278756,
+        "p95": 146.839259,
+        "p99": 483.756342,
+        "n": 309
+      },
+      "net_margin": {
+        "p1": -44.883677,
+        "p5": -13.32226,
+        "p10": -0.00017,
+        "p25": 5.181202,
+        "p50": 12.814494,
+        "p75": 20.593412,
+        "p90": 30.281981,
+        "p95": 35.591731,
+        "p99": 55.818568,
+        "n": 513
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.350239,
+        "p5": -0.038059,
+        "p10": 0.069017,
+        "p25": 0.27165,
+        "p50": 0.49514,
+        "p75": 0.836324,
+        "p90": 1.275307,
+        "p95": 1.589814,
+        "p99": 2.711507,
+        "n": 511
+      },
+      "operating_income_cagr": {
+        "p1": -64.112876,
+        "p5": -28.092765,
+        "p10": -12.925752,
+        "p25": 0.667124,
+        "p50": 10.875356,
+        "p75": 24.29036,
+        "p90": 58.487875,
+        "p95": 102.952963,
+        "p99": 491.284136,
+        "n": 323
+      },
+      "operating_margin": {
+        "p1": -41.609566,
+        "p5": -8.467862,
+        "p10": 1.619448,
+        "p25": 7.861424,
+        "p50": 15.944054,
+        "p75": 25.628709,
+        "p90": 36.607283,
+        "p95": 42.523662,
+        "p99": 62.316598,
+        "n": 513
+      },
+      "receivables_turnover": {
+        "p1": 1.671673,
+        "p5": 2.905842,
+        "p10": 3.864431,
+        "p25": 4.994083,
+        "p50": 6.243455,
+        "p75": 8.178507,
+        "p90": 13.035142,
+        "p95": 18.208298,
+        "p99": 61.977709,
+        "n": 511
+      },
+      "revenue_cagr": {
+        "p1": -23.219791,
+        "p5": -11.589198,
+        "p10": -6.824588,
+        "p25": 1.917545,
+        "p50": 7.90922,
+        "p75": 16.604344,
+        "p90": 33.772438,
+        "p95": 60.942951,
+        "p99": 119.616675,
+        "n": 384
+      },
+      "roa": {
+        "p1": -12.275774,
+        "p5": -3.718465,
+        "p10": 0.03035,
+        "p25": 4.467624,
+        "p50": 9.122047,
+        "p75": 14.98544,
+        "p90": 21.366901,
+        "p95": 28.044719,
+        "p99": 59.961239,
+        "n": 511
+      },
+      "roce": {
+        "p1": -12.232753,
+        "p5": -3.580014,
+        "p10": 1.938431,
+        "p25": 8.09835,
+        "p50": 18.378269,
+        "p75": 27.919585,
+        "p90": 40.460525,
+        "p95": 53.551531,
+        "p99": 110.183227,
+        "n": 510
+      },
+      "roe": {
+        "p1": -27.58475,
+        "p5": -7.082949,
+        "p10": -0.152946,
+        "p25": 8.45974,
+        "p50": 19.886218,
+        "p75": 32.50109,
+        "p90": 60.36489,
+        "p95": 104.713275,
+        "p99": 265.407147,
+        "n": 485
+      }
+    },
+    "FW:manufacturing": {
+      "asset_turnover": {
+        "p1": 0.133133,
+        "p5": 0.292605,
+        "p10": 0.34937,
+        "p25": 0.517263,
+        "p50": 0.753309,
+        "p75": 1.034015,
+        "p90": 1.43439,
+        "p95": 1.707329,
+        "p99": 2.701731,
+        "n": 1019
+      },
+      "current_ratio": {
+        "p1": 0.405622,
+        "p5": 0.765322,
+        "p10": 0.931811,
+        "p25": 1.177866,
+        "p50": 1.557669,
+        "p75": 2.26309,
+        "p90": 3.353509,
+        "p95": 4.299592,
+        "p99": 8.136591,
+        "n": 1021
+      },
+      "debt_ratio": {
+        "p1": 0.112249,
+        "p5": 0.190716,
+        "p10": 0.237493,
+        "p25": 0.354133,
+        "p50": 0.51346,
+        "p75": 0.657447,
+        "p90": 0.782022,
+        "p95": 0.862702,
+        "p99": 1.341796,
+        "n": 1021
+      },
+      "equity_to_assets": {
+        "p1": 9.079605,
+        "p5": 17.999512,
+        "p10": 23.314537,
+        "p25": 34.354964,
+        "p50": 48.163493,
+        "p75": 63.698254,
+        "p90": 75.760489,
+        "p95": 80.542341,
+        "p99": 88.13099,
+        "n": 991
+      },
+      "fcf_margin": {
+        "p1": -62.569939,
+        "p5": -21.447958,
+        "p10": -8.480497,
+        "p25": 0.017265,
+        "p50": 6.376096,
+        "p75": 12.273566,
+        "p90": 18.436725,
+        "p95": 25.453443,
+        "p99": 39.37991,
+        "n": 1016
+      },
+      "interest_coverage": {
+        "p1": -5.629239,
+        "p5": 0.808804,
+        "p10": 2.102855,
+        "p25": 4.783122,
+        "p50": 10.175856,
+        "p75": 27.476028,
+        "p90": 118.409625,
+        "p95": 268.42077,
+        "p99": 1890.365675,
+        "n": 996
+      },
+      "inventory_turnover": {
+        "p1": 0.664459,
+        "p5": 1.056443,
+        "p10": 1.748956,
+        "p25": 2.716364,
+        "p50": 4.118287,
+        "p75": 6.210753,
+        "p90": 14.549276,
+        "p95": 30.297999,
+        "p99": 113.213947,
+        "n": 933
+      },
+      "net_debt_to_ebitda": {
+        "p1": -9.457174,
+        "p5": -3.338664,
+        "p10": -1.835016,
+        "p25": -0.401168,
+        "p50": 0.868256,
+        "p75": 2.201326,
+        "p90": 3.386618,
+        "p95": 4.796695,
+        "p99": 15.805272,
+        "n": 992
+      },
+      "net_income_cagr": {
+        "p1": -77.927444,
+        "p5": -44.759053,
+        "p10": -26.233231,
+        "p25": -4.153235,
+        "p50": 14.050436,
+        "p75": 35.100276,
+        "p90": 64.436676,
+        "p95": 119.143077,
+        "p99": 326.568431,
+        "n": 697
+      },
+      "net_margin": {
+        "p1": -20.766523,
+        "p5": -0.690141,
+        "p10": 2.439073,
+        "p25": 5.941964,
+        "p50": 10.039756,
+        "p75": 15.750513,
+        "p90": 22.085127,
+        "p95": 28.822115,
+        "p99": 44.955219,
+        "n": 1018
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.370679,
+        "p5": -0.109695,
+        "p10": 0.006911,
+        "p25": 0.177079,
+        "p50": 0.365196,
+        "p75": 0.673457,
+        "p90": 1.160064,
+        "p95": 1.634994,
+        "p99": 2.822584,
+        "n": 1017
+      },
+      "operating_income_cagr": {
+        "p1": -63.824526,
+        "p5": -38.288726,
+        "p10": -21.544863,
+        "p25": -1.505818,
+        "p50": 13.78817,
+        "p75": 29.747558,
+        "p90": 61.702989,
+        "p95": 94.437131,
+        "p99": 207.163553,
+        "n": 729
+      },
+      "operating_margin": {
+        "p1": -16.169493,
+        "p5": 2.907471,
+        "p10": 5.515973,
+        "p25": 8.678627,
+        "p50": 13.340454,
+        "p75": 19.736852,
+        "p90": 27.276039,
+        "p95": 37.25965,
+        "p99": 45.599966,
+        "n": 1018
+      },
+      "receivables_turnover": {
+        "p1": 1.339923,
+        "p5": 2.513256,
+        "p10": 3.346832,
+        "p25": 4.811089,
+        "p50": 7.043808,
+        "p75": 11.977021,
+        "p90": 22.844199,
+        "p95": 32.813237,
+        "p99": 124.056523,
+        "n": 1015
+      },
+      "revenue_cagr": {
+        "p1": -35.064678,
+        "p5": -13.499368,
+        "p10": -6.852373,
+        "p25": 0.416344,
+        "p50": 7.504749,
+        "p75": 16.279051,
+        "p90": 25.649035,
+        "p95": 35.833422,
+        "p99": 89.569482,
+        "n": 760
+      },
+      "roa": {
+        "p1": -10.67027,
+        "p5": -0.520833,
+        "p10": 1.431268,
+        "p25": 4.466156,
+        "p50": 8.009199,
+        "p75": 12.00606,
+        "p90": 16.693434,
+        "p95": 20.578198,
+        "p99": 30.162907,
+        "n": 1019
+      },
+      "roce": {
+        "p1": -10.48918,
+        "p5": 2.644099,
+        "p10": 5.778228,
+        "p25": 10.317393,
+        "p50": 16.491257,
+        "p75": 24.5087,
+        "p90": 35.594548,
+        "p95": 41.328449,
+        "p99": 67.906512,
+        "n": 1013
+      },
+      "roe": {
+        "p1": -16.198575,
+        "p5": 0.549972,
+        "p10": 4.671247,
+        "p25": 10.377669,
+        "p50": 16.287888,
+        "p75": 24.932831,
+        "p90": 36.135478,
+        "p95": 49.246687,
+        "p99": 94.187065,
+        "n": 985
+      }
+    },
+    "FW:real_estate": {
+      "asset_turnover": {
+        "p1": 0.067722,
+        "p5": 0.081324,
+        "p10": 0.088787,
+        "p25": 0.124947,
+        "p50": 0.159822,
+        "p75": 0.242597,
+        "p90": 0.33632,
+        "p95": 0.44509,
+        "p99": 1.490909,
+        "n": 164
+      },
+      "current_ratio": {
+        "p1": 0.072632,
+        "p5": 0.206274,
+        "p10": 0.367453,
+        "p25": 0.662224,
+        "p50": 1.113044,
+        "p75": 1.668097,
+        "p90": 4.807471,
+        "p95": 6.338229,
+        "p99": 28.029994,
+        "n": 164
+      },
+      "debt_ratio": {
+        "p1": 0.180489,
+        "p5": 0.295786,
+        "p10": 0.35706,
+        "p25": 0.429318,
+        "p50": 0.523073,
+        "p75": 0.697993,
+        "p90": 0.871522,
+        "p95": 0.989545,
+        "p99": 1.4623,
+        "n": 164
+      },
+      "equity_to_assets": {
+        "p1": 2.714547,
+        "p5": 8.068604,
+        "p10": 18.323392,
+        "p25": 31.161417,
+        "p50": 46.29956,
+        "p75": 55.135932,
+        "p90": 62.293168,
+        "p95": 70.575115,
+        "p99": 81.99209,
+        "n": 156
+      },
+      "fcf_margin": {
+        "p1": -93.619272,
+        "p5": -24.5982,
+        "p10": -7.121913,
+        "p25": 7.755502,
+        "p50": 31.662001,
+        "p75": 49.942726,
+        "p90": 61.430465,
+        "p95": 67.356226,
+        "p99": 77.66174,
+        "n": 164
+      },
+      "interest_coverage": {
+        "p1": -3.567138,
+        "p5": 1.118849,
+        "p10": 1.360161,
+        "p25": 2.235648,
+        "p50": 3.339147,
+        "p75": 5.15787,
+        "p90": 10.074035,
+        "p95": 15.113544,
+        "p99": 49.67776,
+        "n": 156
+      },
+      "inventory_turnover": {
+        "p1": 0.032023,
+        "p5": 0.078252,
+        "p10": 0.105102,
+        "p25": 0.157233,
+        "p50": 0.233214,
+        "p75": 0.392275,
+        "p90": 1.285373,
+        "p95": 9.870153,
+        "p99": 11.372334,
+        "n": 48
+      },
+      "net_debt_to_ebitda": {
+        "p1": -8.185653,
+        "p5": 0.065221,
+        "p10": 1.128486,
+        "p25": 3.501429,
+        "p50": 5.501048,
+        "p75": 6.336032,
+        "p90": 8.010026,
+        "p95": 9.691106,
+        "p99": 35.945146,
+        "n": 160
+      },
+      "net_income_cagr": {
+        "p1": -81.206927,
+        "p5": -60.017319,
+        "p10": -47.070188,
+        "p25": -18.304284,
+        "p50": 2.987619,
+        "p75": 33.875536,
+        "p90": 74.177515,
+        "p95": 139.299925,
+        "p99": 388.460346,
+        "n": 113
+      },
+      "net_margin": {
+        "p1": -34.064932,
+        "p5": 0.554802,
+        "p10": 2.750464,
+        "p25": 8.446652,
+        "p50": 20.193771,
+        "p75": 31.831227,
+        "p90": 43.450292,
+        "p95": 50.755881,
+        "p99": 70.746712,
+        "n": 164
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.398904,
+        "p5": -0.033177,
+        "p10": 0.032672,
+        "p25": 0.334701,
+        "p50": 0.993445,
+        "p75": 1.629093,
+        "p90": 2.542363,
+        "p95": 3.800653,
+        "p99": 5.4568,
+        "n": 164
+      },
+      "operating_income_cagr": {
+        "p1": -61.948444,
+        "p5": -35.73091,
+        "p10": -13.468535,
+        "p25": 1.430692,
+        "p50": 9.696174,
+        "p75": 20.652782,
+        "p90": 33.273224,
+        "p95": 48.413699,
+        "p99": 100.753671,
+        "n": 115
+      },
+      "operating_margin": {
+        "p1": -7.640777,
+        "p5": 0.342,
+        "p10": 4.683068,
+        "p25": 15.47982,
+        "p50": 27.089993,
+        "p75": 37.891509,
+        "p90": 49.630258,
+        "p95": 53.650262,
+        "p99": 91.558332,
+        "n": 164
+      },
+      "receivables_turnover": {
+        "p1": 4.111893,
+        "p5": 5.064352,
+        "p10": 5.56376,
+        "p25": 7.35302,
+        "p50": 14.283683,
+        "p75": 24.833939,
+        "p90": 96.09027,
+        "p95": 193.362509,
+        "p99": 638.340224,
+        "n": 143
+      },
+      "revenue_cagr": {
+        "p1": -50.625227,
+        "p5": -19.713104,
+        "p10": -3.829488,
+        "p25": 4.918327,
+        "p50": 8.389072,
+        "p75": 15.893253,
+        "p90": 26.501836,
+        "p95": 37.612785,
+        "p99": 49.557619,
+        "n": 123
+      },
+      "roa": {
+        "p1": -2.228732,
+        "p5": 0.093662,
+        "p10": 0.640763,
+        "p25": 1.569767,
+        "p50": 3.36701,
+        "p75": 4.950193,
+        "p90": 7.053696,
+        "p95": 9.941307,
+        "p99": 11.935356,
+        "n": 164
+      },
+      "roce": {
+        "p1": -2.195946,
+        "p5": 1.542412,
+        "p10": 2.383034,
+        "p25": 4.178633,
+        "p50": 6.235767,
+        "p75": 9.337942,
+        "p90": 13.075671,
+        "p95": 17.413249,
+        "p99": 22.637298,
+        "n": 164
+      },
+      "roe": {
+        "p1": -6.125675,
+        "p5": 0.478287,
+        "p10": 1.821605,
+        "p25": 4.04584,
+        "p50": 7.957961,
+        "p75": 12.125483,
+        "p90": 21.19941,
+        "p95": 47.450307,
+        "p99": 86.104498,
+        "n": 156
+      }
+    },
+    "FW:utilities": {
+      "asset_turnover": {
+        "p1": 0.060367,
+        "p5": 0.098705,
+        "p10": 0.132007,
+        "p25": 0.175771,
+        "p50": 0.210442,
+        "p75": 0.366169,
+        "p90": 0.718525,
+        "p95": 1.010422,
+        "p99": 1.140405,
+        "n": 214
+      },
+      "current_ratio": {
+        "p1": 0.266445,
+        "p5": 0.451213,
+        "p10": 0.509756,
+        "p25": 0.644558,
+        "p50": 0.789832,
+        "p75": 1.019705,
+        "p90": 1.26114,
+        "p95": 1.608133,
+        "p99": 2.659889,
+        "n": 214
+      },
+      "debt_ratio": {
+        "p1": 0.291121,
+        "p5": 0.362948,
+        "p10": 0.489626,
+        "p25": 0.639762,
+        "p50": 0.715229,
+        "p75": 0.753043,
+        "p90": 0.792688,
+        "p95": 0.839623,
+        "p99": 0.890498,
+        "n": 214
+      },
+      "equity_to_assets": {
+        "p1": 6.525936,
+        "p5": 12.830522,
+        "p10": 19.042691,
+        "p25": 23.469617,
+        "p50": 27.285552,
+        "p75": 34.532706,
+        "p90": 50.633771,
+        "p95": 63.529389,
+        "p99": 70.790756,
+        "n": 214
+      },
+      "fcf_margin": {
+        "p1": -442.159111,
+        "p5": -132.537015,
+        "p10": -44.124122,
+        "p25": -19.35479,
+        "p50": -6.793333,
+        "p75": 3.701558,
+        "p90": 17.935625,
+        "p95": 26.993351,
+        "p99": 51.523518,
+        "n": 214
+      },
+      "interest_coverage": {
+        "p1": -1.008644,
+        "p5": 0.916518,
+        "p10": 1.341878,
+        "p25": 2.203212,
+        "p50": 2.732249,
+        "p75": 3.579125,
+        "p90": 8.407642,
+        "p95": 21.32882,
+        "p99": 284.881149,
+        "n": 214
+      },
+      "inventory_turnover": {
+        "p1": 1.004429,
+        "p5": 3.451275,
+        "p10": 4.279487,
+        "p25": 5.726396,
+        "p50": 7.99387,
+        "p75": 15.229148,
+        "p90": 23.363877,
+        "p95": 36.469431,
+        "p99": 104.471288,
+        "n": 182
+      },
+      "net_debt_to_ebitda": {
+        "p1": -1.681334,
+        "p5": 0.543243,
+        "p10": 1.775988,
+        "p25": 4.39978,
+        "p50": 5.677099,
+        "p75": 6.426499,
+        "p90": 8.324427,
+        "p95": 9.458953,
+        "p99": 19.265476,
+        "n": 214
+      },
+      "net_income_cagr": {
+        "p1": -23.384983,
+        "p5": -11.385207,
+        "p10": -4.559813,
+        "p25": 3.41488,
+        "p50": 10.673161,
+        "p75": 24.384618,
+        "p90": 65.509501,
+        "p95": 95.122597,
+        "p99": 242.766324,
+        "n": 137
+      },
+      "net_margin": {
+        "p1": -8.868515,
+        "p5": -0.883651,
+        "p10": 4.148354,
+        "p25": 8.804446,
+        "p50": 12.509851,
+        "p75": 16.442499,
+        "p90": 24.564668,
+        "p95": 35.102632,
+        "p99": 47.335849,
+        "n": 214
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.264168,
+        "p5": 0.150693,
+        "p10": 0.232056,
+        "p25": 0.344763,
+        "p50": 0.524685,
+        "p75": 0.644411,
+        "p90": 0.857996,
+        "p95": 1.00538,
+        "p99": 1.420853,
+        "n": 214
+      },
+      "operating_income_cagr": {
+        "p1": -25.745953,
+        "p5": -9.612608,
+        "p10": -4.385241,
+        "p25": 4.973185,
+        "p50": 12.718466,
+        "p75": 27.281851,
+        "p90": 52.748589,
+        "p95": 100.153036,
+        "p99": 205.905959,
+        "n": 151
+      },
+      "operating_margin": {
+        "p1": -3.383347,
+        "p5": 7.799355,
+        "p10": 9.988048,
+        "p25": 16.456366,
+        "p50": 20.333914,
+        "p75": 26.413068,
+        "p90": 43.573931,
+        "p95": 57.995679,
+        "p99": 62.697225,
+        "n": 214
+      },
+      "receivables_turnover": {
+        "p1": 1.85284,
+        "p5": 3.328983,
+        "p10": 4.527049,
+        "p25": 6.365743,
+        "p50": 8.173561,
+        "p75": 12.120078,
+        "p90": 17.161638,
+        "p95": 21.268464,
+        "p99": 902.368502,
+        "n": 214
+      },
+      "revenue_cagr": {
+        "p1": -19.514019,
+        "p5": -8.645323,
+        "p10": -6.436964,
+        "p25": -1.459509,
+        "p50": 2.622119,
+        "p75": 8.851734,
+        "p90": 17.064383,
+        "p95": 27.879361,
+        "p99": 198.594818,
+        "n": 160
+      },
+      "roa": {
+        "p1": -3.649417,
+        "p5": -0.468096,
+        "p10": 1.08005,
+        "p25": 2.097791,
+        "p50": 2.777208,
+        "p75": 4.037753,
+        "p90": 7.432143,
+        "p95": 10.356201,
+        "p99": 14.606187,
+        "n": 214
+      },
+      "roce": {
+        "p1": -0.647977,
+        "p5": 2.905165,
+        "p10": 3.931908,
+        "p25": 5.010078,
+        "p50": 5.913512,
+        "p75": 9.379081,
+        "p90": 15.525076,
+        "p95": 20.925471,
+        "p99": 32.299044,
+        "n": 214
+      },
+      "roe": {
+        "p1": -17.139913,
+        "p5": -2.051686,
+        "p10": 4.087397,
+        "p25": 8.179718,
+        "p50": 10.413631,
+        "p75": 13.142743,
+        "p90": 19.19532,
+        "p95": 28.573665,
+        "p99": 47.968941,
+        "n": 214
+      }
+    },
+    "SECTOR:Basic Materials": {
+      "asset_turnover": {
+        "p1": 0.04329,
+        "p5": 0.314708,
+        "p10": 0.352131,
+        "p25": 0.508092,
+        "p50": 0.726267,
+        "p75": 0.951901,
+        "p90": 1.226265,
+        "p95": 1.387931,
+        "p99": 2.735535,
+        "n": 340
+      },
+      "current_ratio": {
+        "p1": 0.333302,
+        "p5": 0.612692,
+        "p10": 0.813172,
+        "p25": 1.080465,
+        "p50": 1.512602,
+        "p75": 2.290175,
+        "p90": 3.35074,
+        "p95": 3.810876,
+        "p99": 5.151731,
+        "n": 342
+      },
+      "debt_ratio": {
+        "p1": 0.129112,
+        "p5": 0.190149,
+        "p10": 0.226278,
+        "p25": 0.309306,
+        "p50": 0.458261,
+        "p75": 0.575628,
+        "p90": 0.684661,
+        "p95": 0.77923,
+        "p99": 1.690365,
+        "n": 342
+      },
+      "equity_to_assets": {
+        "p1": 16.502789,
+        "p5": 22.815821,
+        "p10": 31.604147,
+        "p25": 39.541264,
+        "p50": 53.271592,
+        "p75": 67.354693,
+        "p90": 76.394254,
+        "p95": 80.555241,
+        "p99": 87.136435,
+        "n": 334
+      },
+      "fcf_margin": {
+        "p1": -60.938855,
+        "p5": -26.141113,
+        "p10": -11.29621,
+        "p25": -1.836673,
+        "p50": 4.306386,
+        "p75": 10.121142,
+        "p90": 17.141673,
+        "p95": 25.738855,
+        "p99": 34.475058,
+        "n": 337
+      },
+      "interest_coverage": {
+        "p1": -5.656597,
+        "p5": -0.793369,
+        "p10": 1.209563,
+        "p25": 3.565013,
+        "p50": 9.062117,
+        "p75": 22.466897,
+        "p90": 71.807999,
+        "p95": 168.515205,
+        "p99": 4098.819196,
+        "n": 339
+      },
+      "inventory_turnover": {
+        "p1": 0.962783,
+        "p5": 1.446823,
+        "p10": 2.01767,
+        "p25": 2.750889,
+        "p50": 3.850262,
+        "p75": 5.384302,
+        "p90": 7.928836,
+        "p95": 9.826544,
+        "p99": 12.970222,
+        "n": 332
+      },
+      "net_debt_to_ebitda": {
+        "p1": -2.184615,
+        "p5": -1.426445,
+        "p10": -0.902972,
+        "p25": -0.195806,
+        "p50": 1.012947,
+        "p75": 2.448636,
+        "p90": 3.681736,
+        "p95": 5.213067,
+        "p99": 32.283622,
+        "n": 329
+      },
+      "net_income_cagr": {
+        "p1": -85.449364,
+        "p5": -62.369504,
+        "p10": -41.450519,
+        "p25": -15.802966,
+        "p50": 9.019519,
+        "p75": 30.441494,
+        "p90": 63.125018,
+        "p95": 97.984507,
+        "p99": 300.262975,
+        "n": 222
+      },
+      "net_margin": {
+        "p1": -22.341713,
+        "p5": -3.790144,
+        "p10": 1.358247,
+        "p25": 4.549489,
+        "p50": 8.763397,
+        "p75": 14.893956,
+        "p90": 22.290754,
+        "p95": 31.262296,
+        "p99": 39.378641,
+        "n": 337
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.356944,
+        "p5": -0.102405,
+        "p10": 0.041355,
+        "p25": 0.242403,
+        "p50": 0.415027,
+        "p75": 0.738948,
+        "p90": 1.264543,
+        "p95": 1.664067,
+        "p99": 2.975332,
+        "n": 340
+      },
+      "operating_income_cagr": {
+        "p1": -70.566216,
+        "p5": -56.557046,
+        "p10": -41.205669,
+        "p25": -12.082435,
+        "p50": 9.561287,
+        "p75": 25.371694,
+        "p90": 58.88777,
+        "p95": 95.398116,
+        "p99": 161.017624,
+        "n": 242
+      },
+      "operating_margin": {
+        "p1": -14.055677,
+        "p5": 2.342425,
+        "p10": 5.021558,
+        "p25": 8.691486,
+        "p50": 13.64059,
+        "p75": 20.417098,
+        "p90": 28.43819,
+        "p95": 34.517419,
+        "p99": 50.984609,
+        "n": 337
+      },
+      "receivables_turnover": {
+        "p1": 1.994239,
+        "p5": 2.944107,
+        "p10": 4.251488,
+        "p25": 6.115459,
+        "p50": 9.190378,
+        "p75": 18.277095,
+        "p90": 32.942918,
+        "p95": 72.451206,
+        "p99": 146.497106,
+        "n": 336
+      },
+      "revenue_cagr": {
+        "p1": -36.035965,
+        "p5": -21.367268,
+        "p10": -14.409598,
+        "p25": -4.744886,
+        "p50": 2.754381,
+        "p75": 10.162027,
+        "p90": 20.262776,
+        "p95": 30.038696,
+        "p99": 88.669395,
+        "n": 250
+      },
+      "roa": {
+        "p1": -21.319263,
+        "p5": -3.167831,
+        "p10": 0.150983,
+        "p25": 3.429205,
+        "p50": 7.116334,
+        "p75": 11.385103,
+        "p90": 16.63892,
+        "p95": 22.680509,
+        "p99": 35.10279,
+        "n": 340
+      },
+      "roce": {
+        "p1": -10.001291,
+        "p5": -0.548823,
+        "p10": 3.572231,
+        "p25": 8.984649,
+        "p50": 13.963393,
+        "p75": 22.3876,
+        "p90": 32.023749,
+        "p95": 41.676093,
+        "p99": 83.289595,
+        "n": 334
+      },
+      "roe": {
+        "p1": -16.436864,
+        "p5": -4.08479,
+        "p10": 1.653751,
+        "p25": 7.058178,
+        "p50": 13.772416,
+        "p75": 20.629099,
+        "p90": 29.721434,
+        "p95": 42.369831,
+        "p99": 70.932093,
+        "n": 331
+      }
+    },
+    "SECTOR:Communication Services": {
+      "asset_turnover": {
+        "p1": 0.081633,
+        "p5": 0.226986,
+        "p10": 0.30457,
+        "p25": 0.368201,
+        "p50": 0.503119,
+        "p75": 0.687577,
+        "p90": 0.822275,
+        "p95": 0.910746,
+        "p99": 1.192661,
+        "n": 139
+      },
+      "current_ratio": {
+        "p1": 0.027735,
+        "p5": 0.311084,
+        "p10": 0.411506,
+        "p25": 0.666601,
+        "p50": 1.167003,
+        "p75": 2.11907,
+        "p90": 3.360503,
+        "p95": 7.254607,
+        "p99": 12.213388,
+        "n": 140
+      },
+      "debt_ratio": {
+        "p1": 0.080728,
+        "p5": 0.133593,
+        "p10": 0.191081,
+        "p25": 0.405816,
+        "p50": 0.58663,
+        "p75": 0.761137,
+        "p90": 0.924767,
+        "p95": 1.263484,
+        "p99": 15.967879,
+        "n": 140
+      },
+      "equity_to_assets": {
+        "p1": 0.963395,
+        "p5": 7.437733,
+        "p10": 12.108157,
+        "p25": 25.109111,
+        "p50": 43.058608,
+        "p75": 56.591847,
+        "p90": 80.545348,
+        "p95": 83.932758,
+        "p99": 91.901286,
+        "n": 128
+      },
+      "fcf_margin": {
+        "p1": -13.698942,
+        "p5": -7.903463,
+        "p10": -1.88724,
+        "p25": 5.887121,
+        "p50": 10.693848,
+        "p75": 21.34347,
+        "p90": 32.973882,
+        "p95": 42.706332,
+        "p99": 63.911978,
+        "n": 140
+      },
+      "interest_coverage": {
+        "p1": -23.215241,
+        "p5": -0.319705,
+        "p10": 0.112633,
+        "p25": 2.311225,
+        "p50": 5.141194,
+        "p75": 11.982881,
+        "p90": 155.141374,
+        "p95": 228.517685,
+        "p99": 415.031291,
+        "n": 132
+      },
+      "inventory_turnover": {
+        "p1": 0.627986,
+        "p5": 0.694117,
+        "p10": 2.952004,
+        "p25": 14.623853,
+        "p50": 19.217622,
+        "p75": 25.885272,
+        "p90": 36.694705,
+        "p95": 47.267041,
+        "p99": 59.873179,
+        "n": 35
+      },
+      "net_debt_to_ebitda": {
+        "p1": -5.689807,
+        "p5": -3.004658,
+        "p10": -1.677876,
+        "p25": 0.011311,
+        "p50": 1.768677,
+        "p75": 3.839835,
+        "p90": 6.650059,
+        "p95": 15.085594,
+        "p99": 37.320977,
+        "n": 139
+      },
+      "net_income_cagr": {
+        "p1": -78.150462,
+        "p5": -43.543767,
+        "p10": -16.249823,
+        "p25": 5.693333,
+        "p50": 29.183099,
+        "p75": 63.893678,
+        "p90": 118.247719,
+        "p95": 190.120656,
+        "p99": 236.864797,
+        "n": 73
+      },
+      "net_margin": {
+        "p1": -101.368236,
+        "p5": -69.551549,
+        "p10": -12.038445,
+        "p25": 2.329832,
+        "p50": 9.159001,
+        "p75": 16.907641,
+        "p90": 30.356314,
+        "p95": 38.130238,
+        "p99": 56.214581,
+        "n": 140
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.353945,
+        "p5": 0.017641,
+        "p10": 0.061183,
+        "p25": 0.243326,
+        "p50": 0.563729,
+        "p75": 0.957769,
+        "p90": 1.61493,
+        "p95": 2.184243,
+        "p99": 2.749129,
+        "n": 139
+      },
+      "operating_income_cagr": {
+        "p1": -76.404906,
+        "p5": -27.932056,
+        "p10": -13.080711,
+        "p25": 1.477618,
+        "p50": 14.299716,
+        "p75": 27.461462,
+        "p90": 44.600025,
+        "p95": 59.05578,
+        "p99": 97.068062,
+        "n": 89
+      },
+      "operating_margin": {
+        "p1": -24.13972,
+        "p5": -12.5817,
+        "p10": -1.374199,
+        "p25": 9.582404,
+        "p50": 17.725322,
+        "p75": 25.221719,
+        "p90": 32.531477,
+        "p95": 41.950565,
+        "p99": 55.928575,
+        "n": 140
+      },
+      "receivables_turnover": {
+        "p1": 1.75309,
+        "p5": 2.336542,
+        "p10": 3.43057,
+        "p25": 5.603096,
+        "p50": 7.651651,
+        "p75": 15.960865,
+        "p90": 29.283592,
+        "p95": 35.018646,
+        "p99": 231.123079,
+        "n": 139
+      },
+      "revenue_cagr": {
+        "p1": -14.954798,
+        "p5": -6.820419,
+        "p10": -0.568007,
+        "p25": 1.180406,
+        "p50": 5.088491,
+        "p75": 13.492326,
+        "p90": 27.343317,
+        "p95": 38.947838,
+        "p99": 105.107541,
+        "n": 105
+      },
+      "roa": {
+        "p1": -96.429458,
+        "p5": -17.115383,
+        "p10": -6.070917,
+        "p25": 1.251176,
+        "p50": 4.292862,
+        "p75": 8.894313,
+        "p90": 17.763257,
+        "p95": 20.444748,
+        "p99": 27.053649,
+        "n": 139
+      },
+      "roce": {
+        "p1": -37.83858,
+        "p5": -9.620758,
+        "p10": -0.615626,
+        "p25": 4.930632,
+        "p50": 9.676215,
+        "p75": 17.974947,
+        "p90": 26.656629,
+        "p95": 33.273888,
+        "p99": 40.559409,
+        "n": 135
+      },
+      "roe": {
+        "p1": -114.02671,
+        "p5": -12.062019,
+        "p10": -3.401609,
+        "p25": 3.98212,
+        "p50": 14.285714,
+        "p75": 26.14721,
+        "p90": 39.66288,
+        "p95": 66.17882,
+        "p99": 219.315703,
+        "n": 125
+      }
+    },
+    "SECTOR:Consumer Cyclical": {
+      "asset_turnover": {
+        "p1": 0.233259,
+        "p5": 0.358299,
+        "p10": 0.476584,
+        "p25": 0.729787,
+        "p50": 1.01018,
+        "p75": 1.318693,
+        "p90": 1.874291,
+        "p95": 2.15161,
+        "p99": 2.809587,
+        "n": 481
+      },
+      "current_ratio": {
+        "p1": 0.215812,
+        "p5": 0.552611,
+        "p10": 0.732462,
+        "p25": 1.074994,
+        "p50": 1.374185,
+        "p75": 1.879945,
+        "p90": 2.894138,
+        "p95": 4.589086,
+        "p99": 15.14625,
+        "n": 482
+      },
+      "debt_ratio": {
+        "p1": 0.135738,
+        "p5": 0.212375,
+        "p10": 0.275981,
+        "p25": 0.394574,
+        "p50": 0.594413,
+        "p75": 0.756161,
+        "p90": 0.972492,
+        "p95": 1.13635,
+        "p99": 2.30998,
+        "n": 482
+      },
+      "equity_to_assets": {
+        "p1": 2.725039,
+        "p5": 11.191318,
+        "p10": 17.671151,
+        "p25": 27.888488,
+        "p50": 43.959641,
+        "p75": 61.378688,
+        "p90": 73.583284,
+        "p95": 79.053957,
+        "p99": 85.474024,
+        "n": 439
+      },
+      "fcf_margin": {
+        "p1": -52.426209,
+        "p5": -12.071343,
+        "p10": -4.626651,
+        "p25": 2.117814,
+        "p50": 6.717229,
+        "p75": 11.754842,
+        "p90": 17.998404,
+        "p95": 23.597699,
+        "p99": 41.343637,
+        "n": 481
+      },
+      "interest_coverage": {
+        "p1": -62.176219,
+        "p5": -4.821857,
+        "p10": 1.286687,
+        "p25": 3.276646,
+        "p50": 7.714474,
+        "p75": 23.636116,
+        "p90": 76.477613,
+        "p95": 133.633388,
+        "p99": 511.432152,
+        "n": 444
+      },
+      "inventory_turnover": {
+        "p1": 1.041699,
+        "p5": 1.618025,
+        "p10": 2.06626,
+        "p25": 3.279736,
+        "p50": 5.22117,
+        "p75": 9.265734,
+        "p90": 20.297272,
+        "p95": 33.32473,
+        "p99": 53.097748,
+        "n": 406
+      },
+      "net_debt_to_ebitda": {
+        "p1": -6.79874,
+        "p5": -2.512908,
+        "p10": -1.310921,
+        "p25": -0.132678,
+        "p50": 1.020565,
+        "p75": 2.643921,
+        "p90": 4.222099,
+        "p95": 5.515387,
+        "p99": 26.356035,
+        "n": 467
+      },
+      "net_income_cagr": {
+        "p1": -80.176873,
+        "p5": -32.144077,
+        "p10": -20.152313,
+        "p25": -0.987399,
+        "p50": 13.641271,
+        "p75": 30.875921,
+        "p90": 64.169871,
+        "p95": 115.087657,
+        "p99": 241.543309,
+        "n": 307
+      },
+      "net_margin": {
+        "p1": -50.326338,
+        "p5": -10.753212,
+        "p10": 1.173827,
+        "p25": 4.247962,
+        "p50": 7.848596,
+        "p75": 12.798725,
+        "p90": 17.893505,
+        "p95": 23.851558,
+        "p99": 32.124035,
+        "n": 481
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.647153,
+        "p5": -0.073769,
+        "p10": 0.058358,
+        "p25": 0.232757,
+        "p50": 0.434763,
+        "p75": 0.689121,
+        "p90": 1.157021,
+        "p95": 1.410407,
+        "p99": 2.029249,
+        "n": 482
+      },
+      "operating_income_cagr": {
+        "p1": -41.834469,
+        "p5": -19.729304,
+        "p10": -13.098459,
+        "p25": 0.542229,
+        "p50": 11.706856,
+        "p75": 26.145699,
+        "p90": 42.190998,
+        "p95": 77.093133,
+        "p99": 199.10438,
+        "n": 310
+      },
+      "operating_margin": {
+        "p1": -45.744422,
+        "p5": -6.973587,
+        "p10": 1.942664,
+        "p25": 7.291951,
+        "p50": 10.751945,
+        "p75": 17.129923,
+        "p90": 22.611708,
+        "p95": 28.540557,
+        "p99": 42.091368,
+        "n": 481
+      },
+      "receivables_turnover": {
+        "p1": 2.87037,
+        "p5": 4.259187,
+        "p10": 5.528726,
+        "p25": 7.535884,
+        "p50": 14.575846,
+        "p75": 36.523639,
+        "p90": 104.756387,
+        "p95": 312.22458,
+        "p99": 1594.570115,
+        "n": 468
+      },
+      "revenue_cagr": {
+        "p1": -17.959381,
+        "p5": -6.196727,
+        "p10": -1.581943,
+        "p25": 3.616101,
+        "p50": 11.19728,
+        "p75": 19.700483,
+        "p90": 31.239748,
+        "p95": 39.085893,
+        "p99": 76.963997,
+        "n": 360
+      },
+      "roa": {
+        "p1": -37.733014,
+        "p5": -6.086331,
+        "p10": 0.96142,
+        "p25": 4.042822,
+        "p50": 7.969419,
+        "p75": 13.684882,
+        "p90": 19.299136,
+        "p95": 22.375564,
+        "p99": 28.344496,
+        "n": 481
+      },
+      "roce": {
+        "p1": -47.87996,
+        "p5": -7.747272,
+        "p10": 3.608985,
+        "p25": 10.753971,
+        "p50": 17.703484,
+        "p75": 26.062596,
+        "p90": 42.023183,
+        "p95": 47.966482,
+        "p99": 69.364951,
+        "n": 481
+      },
+      "roe": {
+        "p1": -121.206328,
+        "p5": -21.129873,
+        "p10": 1.729911,
+        "p25": 9.864019,
+        "p50": 17.706704,
+        "p75": 31.53806,
+        "p90": 45.67524,
+        "p95": 55.798207,
+        "p99": 178.561184,
+        "n": 437
+      }
+    },
+    "SECTOR:Consumer Defensive": {
+      "asset_turnover": {
+        "p1": 0.289884,
+        "p5": 0.392908,
+        "p10": 0.481806,
+        "p25": 0.679087,
+        "p50": 0.940278,
+        "p75": 1.472006,
+        "p90": 2.459494,
+        "p95": 2.911523,
+        "p99": 3.602529,
+        "n": 235
+      },
+      "current_ratio": {
+        "p1": 0.493701,
+        "p5": 0.647388,
+        "p10": 0.709599,
+        "p25": 0.937022,
+        "p50": 1.287586,
+        "p75": 1.741871,
+        "p90": 2.67113,
+        "p95": 3.706261,
+        "p99": 7.426659,
+        "n": 235
+      },
+      "debt_ratio": {
+        "p1": 0.11299,
+        "p5": 0.136129,
+        "p10": 0.227964,
+        "p25": 0.38546,
+        "p50": 0.546266,
+        "p75": 0.683202,
+        "p90": 0.908759,
+        "p95": 0.966568,
+        "p99": 1.13492,
+        "n": 235
+      },
+      "equity_to_assets": {
+        "p1": 1.615899,
+        "p5": 6.960948,
+        "p10": 18.761514,
+        "p25": 33.743176,
+        "p50": 46.479101,
+        "p75": 61.845268,
+        "p90": 76.609726,
+        "p95": 82.815131,
+        "p99": 88.730411,
+        "n": 225
+      },
+      "fcf_margin": {
+        "p1": -16.600676,
+        "p5": -4.637666,
+        "p10": -1.262241,
+        "p25": 2.5964,
+        "p50": 8.877249,
+        "p75": 14.72706,
+        "p90": 20.422857,
+        "p95": 22.647376,
+        "p99": 41.030694,
+        "n": 235
+      },
+      "interest_coverage": {
+        "p1": -4.324902,
+        "p5": 1.059023,
+        "p10": 2.877934,
+        "p25": 6.412718,
+        "p50": 11.32313,
+        "p75": 23.734866,
+        "p90": 80.264002,
+        "p95": 227.057726,
+        "p99": 679.662549,
+        "n": 231
+      },
+      "inventory_turnover": {
+        "p1": 0.708878,
+        "p5": 1.502222,
+        "p10": 1.902194,
+        "p25": 3.101175,
+        "p50": 4.829185,
+        "p75": 6.375445,
+        "p90": 9.239181,
+        "p95": 13.379114,
+        "p99": 25.137315,
+        "n": 235
+      },
+      "net_debt_to_ebitda": {
+        "p1": -6.077117,
+        "p5": -1.912842,
+        "p10": -0.797203,
+        "p25": -0.257152,
+        "p50": 1.617053,
+        "p75": 2.721782,
+        "p90": 3.616428,
+        "p95": 4.210268,
+        "p99": 5.995368,
+        "n": 231
+      },
+      "net_income_cagr": {
+        "p1": -55.060663,
+        "p5": -31.352006,
+        "p10": -15.05411,
+        "p25": 1.539162,
+        "p50": 10.973392,
+        "p75": 24.585269,
+        "p90": 39.513297,
+        "p95": 53.123075,
+        "p99": 260.330955,
+        "n": 157
+      },
+      "net_margin": {
+        "p1": -16.172409,
+        "p5": -1.116926,
+        "p10": 1.17991,
+        "p25": 3.845696,
+        "p50": 9.920084,
+        "p75": 15.086148,
+        "p90": 22.233992,
+        "p95": 25.092324,
+        "p99": 37.900469,
+        "n": 235
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.303114,
+        "p5": 0.056251,
+        "p10": 0.145887,
+        "p25": 0.275897,
+        "p50": 0.424748,
+        "p75": 0.662035,
+        "p90": 0.982324,
+        "p95": 1.164982,
+        "p99": 1.57371,
+        "n": 235
+      },
+      "operating_income_cagr": {
+        "p1": -34.941316,
+        "p5": -21.474695,
+        "p10": -12.198525,
+        "p25": 0.750996,
+        "p50": 8.845175,
+        "p75": 18.739855,
+        "p90": 32.524038,
+        "p95": 45.580819,
+        "p99": 63.372814,
+        "n": 170
+      },
+      "operating_margin": {
+        "p1": -2.461499,
+        "p5": 2.21614,
+        "p10": 3.421576,
+        "p25": 7.060583,
+        "p50": 14.446107,
+        "p75": 20.988405,
+        "p90": 29.044042,
+        "p95": 32.502708,
+        "p99": 56.694744,
+        "n": 235
+      },
+      "receivables_turnover": {
+        "p1": 2.931847,
+        "p5": 4.197989,
+        "p10": 5.183473,
+        "p25": 9.663566,
+        "p50": 13.233644,
+        "p75": 23.127288,
+        "p90": 67.644692,
+        "p95": 93.217921,
+        "p99": 424.552117,
+        "n": 227
+      },
+      "revenue_cagr": {
+        "p1": -11.585439,
+        "p5": -5.47428,
+        "p10": -2.302198,
+        "p25": 1.188308,
+        "p50": 5.001838,
+        "p75": 8.716305,
+        "p90": 18.157174,
+        "p95": 24.857332,
+        "p99": 79.40004,
+        "n": 176
+      },
+      "roa": {
+        "p1": -11.988768,
+        "p5": -0.67265,
+        "p10": 2.004866,
+        "p25": 4.915895,
+        "p50": 8.790715,
+        "p75": 13.425315,
+        "p90": 20.895586,
+        "p95": 24.476189,
+        "p99": 40.353232,
+        "n": 235
+      },
+      "roce": {
+        "p1": -7.858088,
+        "p5": 2.239029,
+        "p10": 5.586537,
+        "p25": 10.77658,
+        "p50": 18.001007,
+        "p75": 26.377857,
+        "p90": 37.373785,
+        "p95": 55.354712,
+        "p99": 91.544337,
+        "n": 235
+      },
+      "roe": {
+        "p1": -22.258328,
+        "p5": -0.958936,
+        "p10": 4.926083,
+        "p25": 10.467116,
+        "p50": 18.959139,
+        "p75": 30.652179,
+        "p90": 67.117008,
+        "p95": 107.573113,
+        "p99": 453.074616,
+        "n": 224
+      }
+    },
+    "SECTOR:Energy": {
+      "asset_turnover": {
+        "p1": 0.129388,
+        "p5": 0.205673,
+        "p10": 0.227161,
+        "p25": 0.497571,
+        "p50": 0.711541,
+        "p75": 1.552614,
+        "p90": 2.27497,
+        "p95": 2.663345,
+        "p99": 3.673073,
+        "n": 144
+      },
+      "current_ratio": {
+        "p1": 0.389521,
+        "p5": 0.556234,
+        "p10": 0.671243,
+        "p25": 0.827247,
+        "p50": 1.165372,
+        "p75": 1.601685,
+        "p90": 2.437562,
+        "p95": 4.129003,
+        "p99": 9.938222,
+        "n": 144
+      },
+      "debt_ratio": {
+        "p1": 0.09934,
+        "p5": 0.191588,
+        "p10": 0.34959,
+        "p25": 0.421905,
+        "p50": 0.542073,
+        "p75": 0.627403,
+        "p90": 0.727378,
+        "p95": 0.755984,
+        "p99": 0.844146,
+        "n": 144
+      },
+      "equity_to_assets": {
+        "p1": 11.730876,
+        "p5": 20.029953,
+        "p10": 23.610046,
+        "p25": 35.551476,
+        "p50": 42.779577,
+        "p75": 54.679567,
+        "p90": 63.725507,
+        "p95": 80.8412,
+        "p99": 90.066038,
+        "n": 144
+      },
+      "fcf_margin": {
+        "p1": -41.088724,
+        "p5": -7.111247,
+        "p10": -2.694642,
+        "p25": 3.207268,
+        "p50": 7.335291,
+        "p75": 15.636035,
+        "p90": 22.948602,
+        "p95": 28.18093,
+        "p99": 58.143912,
+        "n": 144
+      },
+      "interest_coverage": {
+        "p1": -2.169179,
+        "p5": 1.717225,
+        "p10": 3.132595,
+        "p25": 5.115282,
+        "p50": 9.827029,
+        "p75": 22.013514,
+        "p90": 68.226491,
+        "p95": 142.795491,
+        "p99": 589.676954,
+        "n": 137
+      },
+      "inventory_turnover": {
+        "p1": 1.659793,
+        "p5": 2.159242,
+        "p10": 4.409595,
+        "p25": 6.208355,
+        "p50": 11.288056,
+        "p75": 18.045741,
+        "p90": 36.655061,
+        "p95": 43.787325,
+        "p99": 53.233896,
+        "n": 125
+      },
+      "net_debt_to_ebitda": {
+        "p1": -1.313966,
+        "p5": -0.879869,
+        "p10": -0.540571,
+        "p25": 0.490099,
+        "p50": 1.065129,
+        "p75": 2.555982,
+        "p90": 4.660059,
+        "p95": 5.0638,
+        "p99": 7.376257,
+        "n": 143
+      },
+      "net_income_cagr": {
+        "p1": -75.657081,
+        "p5": -53.255272,
+        "p10": -50.519905,
+        "p25": -28.34241,
+        "p50": -3.17528,
+        "p75": 11.89215,
+        "p90": 41.102075,
+        "p95": 68.142075,
+        "p99": 349.759916,
+        "n": 98
+      },
+      "net_margin": {
+        "p1": -2.311647,
+        "p5": 1.227605,
+        "p10": 2.251091,
+        "p25": 5.819422,
+        "p50": 10.765497,
+        "p75": 19.675378,
+        "p90": 32.192869,
+        "p95": 36.276808,
+        "p99": 64.277315,
+        "n": 144
+      },
+      "ocf_to_current_liabilities": {
+        "p1": 0.06376,
+        "p5": 0.155385,
+        "p10": 0.257881,
+        "p25": 0.416021,
+        "p50": 0.767822,
+        "p75": 1.328542,
+        "p90": 2.047668,
+        "p95": 2.675308,
+        "p99": 7.676814,
+        "n": 144
+      },
+      "operating_income_cagr": {
+        "p1": -80.793299,
+        "p5": -57.372291,
+        "p10": -40.003234,
+        "p25": -29.541366,
+        "p50": -3.505323,
+        "p75": 16.676731,
+        "p90": 39.479522,
+        "p95": 57.408077,
+        "p99": 135.382593,
+        "n": 104
+      },
+      "operating_margin": {
+        "p1": -1.070605,
+        "p5": 2.604641,
+        "p10": 4.356456,
+        "p25": 8.620062,
+        "p50": 16.206161,
+        "p75": 30.549843,
+        "p90": 40.356393,
+        "p95": 53.895262,
+        "p99": 76.71042,
+        "n": 144
+      },
+      "receivables_turnover": {
+        "p1": 4.1654,
+        "p5": 4.587196,
+        "p10": 5.352076,
+        "p25": 8.328062,
+        "p50": 10.618447,
+        "p75": 15.107431,
+        "p90": 44.119233,
+        "p95": 58.4225,
+        "p99": 223.905426,
+        "n": 144
+      },
+      "revenue_cagr": {
+        "p1": -39.074109,
+        "p5": -29.172977,
+        "p10": -21.72367,
+        "p25": -12.737997,
+        "p50": -6.744779,
+        "p75": 0.691799,
+        "p90": 10.633192,
+        "p95": 15.531522,
+        "p99": 48.593507,
+        "n": 108
+      },
+      "roa": {
+        "p1": -2.681684,
+        "p5": 1.289446,
+        "p10": 2.781541,
+        "p25": 4.596193,
+        "p50": 7.507822,
+        "p75": 13.837705,
+        "p90": 18.859162,
+        "p95": 26.622946,
+        "p99": 38.974232,
+        "n": 144
+      },
+      "roce": {
+        "p1": -1.632482,
+        "p5": 4.910665,
+        "p10": 6.723084,
+        "p25": 10.150355,
+        "p50": 14.403166,
+        "p75": 24.115853,
+        "p90": 35.608668,
+        "p95": 50.262998,
+        "p99": 59.254976,
+        "n": 144
+      },
+      "roe": {
+        "p1": -4.672194,
+        "p5": 4.052568,
+        "p10": 7.568511,
+        "p25": 11.506669,
+        "p50": 17.963902,
+        "p75": 29.523979,
+        "p90": 44.79501,
+        "p95": 52.350368,
+        "p99": 134.95792,
+        "n": 144
+      }
+    },
+    "SECTOR:Healthcare": {
+      "asset_turnover": {
+        "p1": 0.196794,
+        "p5": 0.304217,
+        "p10": 0.3575,
+        "p25": 0.481641,
+        "p50": 0.617125,
+        "p75": 0.797195,
+        "p90": 1.221342,
+        "p95": 1.678108,
+        "p99": 4.706343,
+        "n": 419
+      },
+      "current_ratio": {
+        "p1": 0.661313,
+        "p5": 0.851152,
+        "p10": 0.942616,
+        "p25": 1.227232,
+        "p50": 1.684433,
+        "p75": 2.654624,
+        "p90": 4.135999,
+        "p95": 5.1254,
+        "p99": 7.552754,
+        "n": 411
+      },
+      "debt_ratio": {
+        "p1": 0.102375,
+        "p5": 0.138282,
+        "p10": 0.197247,
+        "p25": 0.298048,
+        "p50": 0.453613,
+        "p75": 0.605205,
+        "p90": 0.779324,
+        "p95": 0.975319,
+        "p99": 1.045465,
+        "n": 419
+      },
+      "equity_to_assets": {
+        "p1": 1.968947,
+        "p5": 20.516893,
+        "p10": 28.30925,
+        "p25": 39.553842,
+        "p50": 55.129485,
+        "p75": 69.993041,
+        "p90": 79.724799,
+        "p95": 85.834114,
+        "p99": 89.109803,
+        "n": 401
+      },
+      "fcf_margin": {
+        "p1": -53.708734,
+        "p5": -4.461757,
+        "p10": 0.140215,
+        "p25": 4.157686,
+        "p50": 11.686479,
+        "p75": 17.371285,
+        "p90": 25.768699,
+        "p95": 28.905133,
+        "p99": 39.494749,
+        "n": 418
+      },
+      "interest_coverage": {
+        "p1": -14.486955,
+        "p5": 0.560642,
+        "p10": 2.321562,
+        "p25": 5.330054,
+        "p50": 9.559857,
+        "p75": 24.850628,
+        "p90": 84.435195,
+        "p95": 166.220119,
+        "p99": 961.534973,
+        "n": 400
+      },
+      "inventory_turnover": {
+        "p1": 0.690439,
+        "p5": 1.036411,
+        "p10": 1.168805,
+        "p25": 1.684855,
+        "p50": 2.6216,
+        "p75": 5.159501,
+        "p90": 17.698402,
+        "p95": 26.038656,
+        "p99": 43.208727,
+        "n": 383
+      },
+      "net_debt_to_ebitda": {
+        "p1": -6.20361,
+        "p5": -1.882691,
+        "p10": -1.245167,
+        "p25": -0.332974,
+        "p50": 0.895352,
+        "p75": 2.259772,
+        "p90": 3.552217,
+        "p95": 4.459285,
+        "p99": 7.902797,
+        "n": 403
+      },
+      "net_income_cagr": {
+        "p1": -86.446205,
+        "p5": -40.118148,
+        "p10": -24.8597,
+        "p25": -4.242273,
+        "p50": 9.990042,
+        "p75": 30.230855,
+        "p90": 77.51621,
+        "p95": 127.150004,
+        "p99": 393.397182,
+        "n": 288
+      },
+      "net_margin": {
+        "p1": -91.343326,
+        "p5": -3.443297,
+        "p10": 0.899879,
+        "p25": 6.820825,
+        "p50": 13.202618,
+        "p75": 20.057326,
+        "p90": 26.967168,
+        "p95": 30.21355,
+        "p99": 40.544544,
+        "n": 419
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.167198,
+        "p5": 0.081133,
+        "p10": 0.170362,
+        "p25": 0.349374,
+        "p50": 0.583022,
+        "p75": 0.868901,
+        "p90": 1.245493,
+        "p95": 1.588349,
+        "p99": 2.51469,
+        "n": 410
+      },
+      "operating_income_cagr": {
+        "p1": -60.739433,
+        "p5": -29.51916,
+        "p10": -17.924836,
+        "p25": -3.451965,
+        "p50": 10.391433,
+        "p75": 23.785277,
+        "p90": 38.705095,
+        "p95": 58.698321,
+        "p99": 189.691732,
+        "n": 289
+      },
+      "operating_margin": {
+        "p1": -57.04964,
+        "p5": 1.236076,
+        "p10": 4.127492,
+        "p25": 12.532197,
+        "p50": 18.334628,
+        "p75": 25.170429,
+        "p90": 30.853383,
+        "p95": 36.430578,
+        "p99": 40.177473,
+        "n": 411
+      },
+      "receivables_turnover": {
+        "p1": 2.392656,
+        "p5": 3.082427,
+        "p10": 3.684698,
+        "p25": 4.632373,
+        "p50": 5.829463,
+        "p75": 7.978019,
+        "p90": 16.657591,
+        "p95": 22.030864,
+        "p99": 49.460183,
+        "n": 419
+      },
+      "revenue_cagr": {
+        "p1": -38.893007,
+        "p5": -4.945764,
+        "p10": -1.776245,
+        "p25": 3.562457,
+        "p50": 9.459976,
+        "p75": 14.897037,
+        "p90": 21.324444,
+        "p95": 28.630657,
+        "p99": 74.1359,
+        "n": 313
+      },
+      "roa": {
+        "p1": -21.309817,
+        "p5": -1.297759,
+        "p10": 1.304227,
+        "p25": 4.186295,
+        "p50": 7.947618,
+        "p75": 12.706772,
+        "p90": 17.721222,
+        "p95": 20.987416,
+        "p99": 30.389398,
+        "n": 419
+      },
+      "roce": {
+        "p1": -24.60745,
+        "p5": 1.66443,
+        "p10": 4.339071,
+        "p25": 8.565597,
+        "p50": 14.505091,
+        "p75": 21.744302,
+        "p90": 29.159706,
+        "p95": 37.283344,
+        "p99": 57.20819,
+        "n": 411
+      },
+      "roe": {
+        "p1": -39.130187,
+        "p5": -3.156127,
+        "p10": 2.565258,
+        "p25": 9.080675,
+        "p50": 15.174219,
+        "p75": 21.997272,
+        "p90": 36.946311,
+        "p95": 62.69455,
+        "p99": 144.455953,
+        "n": 400
+      }
+    },
+    "SECTOR:Industrials": {
+      "asset_turnover": {
+        "p1": 0.141544,
+        "p5": 0.273203,
+        "p10": 0.348242,
+        "p25": 0.525411,
+        "p50": 0.771127,
+        "p75": 1.097888,
+        "p90": 1.536541,
+        "p95": 1.80128,
+        "p99": 2.354751,
+        "n": 679
+      },
+      "current_ratio": {
+        "p1": 0.513525,
+        "p5": 0.874557,
+        "p10": 1.009542,
+        "p25": 1.201082,
+        "p50": 1.588262,
+        "p75": 2.253128,
+        "p90": 3.404958,
+        "p95": 4.692745,
+        "p99": 8.527856,
+        "n": 679
+      },
+      "debt_ratio": {
+        "p1": 0.109867,
+        "p5": 0.190878,
+        "p10": 0.242258,
+        "p25": 0.373559,
+        "p50": 0.541591,
+        "p75": 0.686589,
+        "p90": 0.802491,
+        "p95": 0.897664,
+        "p99": 1.143835,
+        "n": 679
+      },
+      "equity_to_assets": {
+        "p1": 7.652759,
+        "p5": 16.140934,
+        "p10": 21.42377,
+        "p25": 32.135949,
+        "p50": 45.719609,
+        "p75": 61.338156,
+        "p90": 75.504637,
+        "p95": 80.13114,
+        "p99": 88.599936,
+        "n": 657
+      },
+      "fcf_margin": {
+        "p1": -68.899676,
+        "p5": -20.537484,
+        "p10": -6.431197,
+        "p25": 1.250803,
+        "p50": 7.072498,
+        "p75": 13.167683,
+        "p90": 18.708594,
+        "p95": 24.596147,
+        "p99": 44.95425,
+        "n": 679
+      },
+      "interest_coverage": {
+        "p1": -2.554031,
+        "p5": 1.535553,
+        "p10": 2.529297,
+        "p25": 5.333164,
+        "p50": 10.721649,
+        "p75": 29.968857,
+        "p90": 141.621862,
+        "p95": 275.959243,
+        "p99": 977.847234,
+        "n": 657
+      },
+      "inventory_turnover": {
+        "p1": 0.594619,
+        "p5": 0.973502,
+        "p10": 1.472257,
+        "p25": 2.704598,
+        "p50": 4.330203,
+        "p75": 7.450892,
+        "p90": 26.783389,
+        "p95": 55.723365,
+        "p99": 117.531457,
+        "n": 601
+      },
+      "net_debt_to_ebitda": {
+        "p1": -10.89692,
+        "p5": -4.508902,
+        "p10": -2.511202,
+        "p25": -0.609311,
+        "p50": 0.828301,
+        "p75": 2.078461,
+        "p90": 3.231006,
+        "p95": 4.349827,
+        "p99": 10.677172,
+        "n": 663
+      },
+      "net_income_cagr": {
+        "p1": -68.604109,
+        "p5": -34.386146,
+        "p10": -15.819415,
+        "p25": -1.364311,
+        "p50": 15.548152,
+        "p75": 35.992613,
+        "p90": 65.12845,
+        "p95": 119.57498,
+        "p99": 313.844094,
+        "n": 475
+      },
+      "net_margin": {
+        "p1": -10.497435,
+        "p5": 1.571464,
+        "p10": 3.276654,
+        "p25": 6.318554,
+        "p50": 10.477299,
+        "p75": 16.040824,
+        "p90": 21.999074,
+        "p95": 28.130684,
+        "p99": 49.034171,
+        "n": 681
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.3699,
+        "p5": -0.110658,
+        "p10": 0.001979,
+        "p25": 0.146026,
+        "p50": 0.341736,
+        "p75": 0.633809,
+        "p90": 1.11134,
+        "p95": 1.591435,
+        "p99": 2.783564,
+        "n": 677
+      },
+      "operating_income_cagr": {
+        "p1": -44.45534,
+        "p5": -20.875519,
+        "p10": -10.960566,
+        "p25": 1.231123,
+        "p50": 15.108698,
+        "p75": 31.016536,
+        "p90": 61.704344,
+        "p95": 86.257487,
+        "p99": 215.586379,
+        "n": 487
+      },
+      "operating_margin": {
+        "p1": -16.489441,
+        "p5": 3.648734,
+        "p10": 5.605527,
+        "p25": 8.674341,
+        "p50": 13.143964,
+        "p75": 19.65843,
+        "p90": 26.897851,
+        "p95": 37.395193,
+        "p99": 44.521085,
+        "n": 681
+      },
+      "receivables_turnover": {
+        "p1": 1.278835,
+        "p5": 2.37596,
+        "p10": 3.230453,
+        "p25": 4.432024,
+        "p50": 6.340659,
+        "p75": 9.29825,
+        "p90": 18.002179,
+        "p95": 25.373024,
+        "p99": 105.134917,
+        "n": 679
+      },
+      "revenue_cagr": {
+        "p1": -20.880701,
+        "p5": -6.672685,
+        "p10": -3.082107,
+        "p25": 3.122955,
+        "p50": 10.000115,
+        "p75": 17.986819,
+        "p90": 26.991413,
+        "p95": 38.2655,
+        "p99": 86.228217,
+        "n": 510
+      },
+      "roa": {
+        "p1": -7.695865,
+        "p5": 1.076119,
+        "p10": 2.365916,
+        "p25": 4.923442,
+        "p50": 8.408908,
+        "p75": 12.280154,
+        "p90": 16.7262,
+        "p95": 20.056239,
+        "p99": 26.950748,
+        "n": 679
+      },
+      "roce": {
+        "p1": -9.924917,
+        "p5": 4.130296,
+        "p10": 6.669665,
+        "p25": 11.243485,
+        "p50": 17.605859,
+        "p75": 25.807675,
+        "p90": 36.236688,
+        "p95": 41.010371,
+        "p99": 62.299532,
+        "n": 679
+      },
+      "roe": {
+        "p1": -14.619784,
+        "p5": 3.976621,
+        "p10": 6.671434,
+        "p25": 12.052796,
+        "p50": 17.712312,
+        "p75": 27.734346,
+        "p90": 39.960543,
+        "p95": 55.297076,
+        "p99": 103.886081,
+        "n": 654
+      }
+    },
+    "SECTOR:Real Estate": {
+      "asset_turnover": {
+        "p1": 0.067722,
+        "p5": 0.081324,
+        "p10": 0.088787,
+        "p25": 0.124947,
+        "p50": 0.159822,
+        "p75": 0.242597,
+        "p90": 0.33632,
+        "p95": 0.44509,
+        "p99": 1.490909,
+        "n": 164
+      },
+      "current_ratio": {
+        "p1": 0.072632,
+        "p5": 0.206274,
+        "p10": 0.367453,
+        "p25": 0.662224,
+        "p50": 1.113044,
+        "p75": 1.668097,
+        "p90": 4.807471,
+        "p95": 6.338229,
+        "p99": 28.029994,
+        "n": 164
+      },
+      "debt_ratio": {
+        "p1": 0.180489,
+        "p5": 0.295786,
+        "p10": 0.35706,
+        "p25": 0.429318,
+        "p50": 0.523073,
+        "p75": 0.697993,
+        "p90": 0.871522,
+        "p95": 0.989545,
+        "p99": 1.4623,
+        "n": 164
+      },
+      "equity_to_assets": {
+        "p1": 2.714547,
+        "p5": 8.068604,
+        "p10": 18.323392,
+        "p25": 31.161417,
+        "p50": 46.29956,
+        "p75": 55.135932,
+        "p90": 62.293168,
+        "p95": 70.575115,
+        "p99": 81.99209,
+        "n": 156
+      },
+      "fcf_margin": {
+        "p1": -93.619272,
+        "p5": -24.5982,
+        "p10": -7.121913,
+        "p25": 7.755502,
+        "p50": 31.662001,
+        "p75": 49.942726,
+        "p90": 61.430465,
+        "p95": 67.356226,
+        "p99": 77.66174,
+        "n": 164
+      },
+      "interest_coverage": {
+        "p1": -3.567138,
+        "p5": 1.118849,
+        "p10": 1.360161,
+        "p25": 2.235648,
+        "p50": 3.339147,
+        "p75": 5.15787,
+        "p90": 10.074035,
+        "p95": 15.113544,
+        "p99": 49.67776,
+        "n": 156
+      },
+      "inventory_turnover": {
+        "p1": 0.032023,
+        "p5": 0.078252,
+        "p10": 0.105102,
+        "p25": 0.157233,
+        "p50": 0.233214,
+        "p75": 0.392275,
+        "p90": 1.285373,
+        "p95": 9.870153,
+        "p99": 11.372334,
+        "n": 48
+      },
+      "net_debt_to_ebitda": {
+        "p1": -8.185653,
+        "p5": 0.065221,
+        "p10": 1.128486,
+        "p25": 3.501429,
+        "p50": 5.501048,
+        "p75": 6.336032,
+        "p90": 8.010026,
+        "p95": 9.691106,
+        "p99": 35.945146,
+        "n": 160
+      },
+      "net_income_cagr": {
+        "p1": -81.206927,
+        "p5": -60.017319,
+        "p10": -47.070188,
+        "p25": -18.304284,
+        "p50": 2.987619,
+        "p75": 33.875536,
+        "p90": 74.177515,
+        "p95": 139.299925,
+        "p99": 388.460346,
+        "n": 113
+      },
+      "net_margin": {
+        "p1": -34.064932,
+        "p5": 0.554802,
+        "p10": 2.750464,
+        "p25": 8.446652,
+        "p50": 20.193771,
+        "p75": 31.831227,
+        "p90": 43.450292,
+        "p95": 50.755881,
+        "p99": 70.746712,
+        "n": 164
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.398904,
+        "p5": -0.033177,
+        "p10": 0.032672,
+        "p25": 0.334701,
+        "p50": 0.993445,
+        "p75": 1.629093,
+        "p90": 2.542363,
+        "p95": 3.800653,
+        "p99": 5.4568,
+        "n": 164
+      },
+      "operating_income_cagr": {
+        "p1": -61.948444,
+        "p5": -35.73091,
+        "p10": -13.468535,
+        "p25": 1.430692,
+        "p50": 9.696174,
+        "p75": 20.652782,
+        "p90": 33.273224,
+        "p95": 48.413699,
+        "p99": 100.753671,
+        "n": 115
+      },
+      "operating_margin": {
+        "p1": -7.640777,
+        "p5": 0.342,
+        "p10": 4.683068,
+        "p25": 15.47982,
+        "p50": 27.089993,
+        "p75": 37.891509,
+        "p90": 49.630258,
+        "p95": 53.650262,
+        "p99": 91.558332,
+        "n": 164
+      },
+      "receivables_turnover": {
+        "p1": 4.111893,
+        "p5": 5.064352,
+        "p10": 5.56376,
+        "p25": 7.35302,
+        "p50": 14.283683,
+        "p75": 24.833939,
+        "p90": 96.09027,
+        "p95": 193.362509,
+        "p99": 638.340224,
+        "n": 143
+      },
+      "revenue_cagr": {
+        "p1": -50.625227,
+        "p5": -19.713104,
+        "p10": -3.829488,
+        "p25": 4.918327,
+        "p50": 8.389072,
+        "p75": 15.893253,
+        "p90": 26.501836,
+        "p95": 37.612785,
+        "p99": 49.557619,
+        "n": 123
+      },
+      "roa": {
+        "p1": -2.228732,
+        "p5": 0.093662,
+        "p10": 0.640763,
+        "p25": 1.569767,
+        "p50": 3.36701,
+        "p75": 4.950193,
+        "p90": 7.053696,
+        "p95": 9.941307,
+        "p99": 11.935356,
+        "n": 164
+      },
+      "roce": {
+        "p1": -2.195946,
+        "p5": 1.542412,
+        "p10": 2.383034,
+        "p25": 4.178633,
+        "p50": 6.235767,
+        "p75": 9.337942,
+        "p90": 13.075671,
+        "p95": 17.413249,
+        "p99": 22.637298,
+        "n": 164
+      },
+      "roe": {
+        "p1": -6.125675,
+        "p5": 0.478287,
+        "p10": 1.821605,
+        "p25": 4.04584,
+        "p50": 7.957961,
+        "p75": 12.125483,
+        "p90": 21.19941,
+        "p95": 47.450307,
+        "p99": 86.104498,
+        "n": 156
+      }
+    },
+    "SECTOR:Technology": {
+      "asset_turnover": {
+        "p1": 0.154874,
+        "p5": 0.241208,
+        "p10": 0.317446,
+        "p25": 0.468251,
+        "p50": 0.695095,
+        "p75": 1.051754,
+        "p90": 1.38765,
+        "p95": 1.594601,
+        "p99": 2.986782,
+        "n": 511
+      },
+      "current_ratio": {
+        "p1": 0.490331,
+        "p5": 0.762339,
+        "p10": 0.902924,
+        "p25": 1.110204,
+        "p50": 1.615074,
+        "p75": 2.561758,
+        "p90": 3.872324,
+        "p95": 5.10071,
+        "p99": 6.522492,
+        "n": 511
+      },
+      "debt_ratio": {
+        "p1": 0.159702,
+        "p5": 0.197034,
+        "p10": 0.258521,
+        "p25": 0.353976,
+        "p50": 0.479237,
+        "p75": 0.678472,
+        "p90": 0.878682,
+        "p95": 0.986518,
+        "p99": 1.86715,
+        "n": 511
+      },
+      "equity_to_assets": {
+        "p1": 3.06297,
+        "p5": 11.716144,
+        "p10": 16.737263,
+        "p25": 34.811227,
+        "p50": 52.861999,
+        "p75": 64.754457,
+        "p90": 75.113977,
+        "p95": 80.353138,
+        "p99": 83.951616,
+        "n": 488
+      },
+      "fcf_margin": {
+        "p1": -45.902216,
+        "p5": -14.774449,
+        "p10": -4.260032,
+        "p25": 6.347973,
+        "p50": 15.672338,
+        "p75": 26.044096,
+        "p90": 32.957031,
+        "p95": 39.012965,
+        "p99": 54.076463,
+        "n": 513
+      },
+      "interest_coverage": {
+        "p1": -46.437775,
+        "p5": -3.01048,
+        "p10": 1.593045,
+        "p25": 5.362458,
+        "p50": 12.995985,
+        "p75": 32.665999,
+        "p90": 64.725952,
+        "p95": 107.698902,
+        "p99": 537.100309,
+        "n": 472
+      },
+      "inventory_turnover": {
+        "p1": 1.239068,
+        "p5": 1.558994,
+        "p10": 1.937862,
+        "p25": 2.587592,
+        "p50": 3.585767,
+        "p75": 5.865569,
+        "p90": 17.328421,
+        "p95": 24.951412,
+        "p99": 43.120304,
+        "n": 284
+      },
+      "net_debt_to_ebitda": {
+        "p1": -23.431256,
+        "p5": -2.638437,
+        "p10": -1.571143,
+        "p25": -0.674746,
+        "p50": 0.154843,
+        "p75": 1.55729,
+        "p90": 2.970589,
+        "p95": 3.994972,
+        "p99": 8.149353,
+        "n": 494
+      },
+      "net_income_cagr": {
+        "p1": -60.038868,
+        "p5": -31.287718,
+        "p10": -19.060042,
+        "p25": -0.880903,
+        "p50": 9.496075,
+        "p75": 27.995541,
+        "p90": 78.278756,
+        "p95": 146.839259,
+        "p99": 483.756342,
+        "n": 309
+      },
+      "net_margin": {
+        "p1": -44.883677,
+        "p5": -13.32226,
+        "p10": -0.00017,
+        "p25": 5.181202,
+        "p50": 12.814494,
+        "p75": 20.593412,
+        "p90": 30.281981,
+        "p95": 35.591731,
+        "p99": 55.818568,
+        "n": 513
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.350239,
+        "p5": -0.038059,
+        "p10": 0.069017,
+        "p25": 0.27165,
+        "p50": 0.49514,
+        "p75": 0.836324,
+        "p90": 1.275307,
+        "p95": 1.589814,
+        "p99": 2.711507,
+        "n": 511
+      },
+      "operating_income_cagr": {
+        "p1": -64.112876,
+        "p5": -28.092765,
+        "p10": -12.925752,
+        "p25": 0.667124,
+        "p50": 10.875356,
+        "p75": 24.29036,
+        "p90": 58.487875,
+        "p95": 102.952963,
+        "p99": 491.284136,
+        "n": 323
+      },
+      "operating_margin": {
+        "p1": -41.609566,
+        "p5": -8.467862,
+        "p10": 1.619448,
+        "p25": 7.861424,
+        "p50": 15.944054,
+        "p75": 25.628709,
+        "p90": 36.607283,
+        "p95": 42.523662,
+        "p99": 62.316598,
+        "n": 513
+      },
+      "receivables_turnover": {
+        "p1": 1.671673,
+        "p5": 2.905842,
+        "p10": 3.864431,
+        "p25": 4.994083,
+        "p50": 6.243455,
+        "p75": 8.178507,
+        "p90": 13.035142,
+        "p95": 18.208298,
+        "p99": 61.977709,
+        "n": 511
+      },
+      "revenue_cagr": {
+        "p1": -23.219791,
+        "p5": -11.589198,
+        "p10": -6.824588,
+        "p25": 1.917545,
+        "p50": 7.90922,
+        "p75": 16.604344,
+        "p90": 33.772438,
+        "p95": 60.942951,
+        "p99": 119.616675,
+        "n": 384
+      },
+      "roa": {
+        "p1": -12.275774,
+        "p5": -3.718465,
+        "p10": 0.03035,
+        "p25": 4.467624,
+        "p50": 9.122047,
+        "p75": 14.98544,
+        "p90": 21.366901,
+        "p95": 28.044719,
+        "p99": 59.961239,
+        "n": 511
+      },
+      "roce": {
+        "p1": -12.232753,
+        "p5": -3.580014,
+        "p10": 1.938431,
+        "p25": 8.09835,
+        "p50": 18.378269,
+        "p75": 27.919585,
+        "p90": 40.460525,
+        "p95": 53.551531,
+        "p99": 110.183227,
+        "n": 510
+      },
+      "roe": {
+        "p1": -27.58475,
+        "p5": -7.082949,
+        "p10": -0.152946,
+        "p25": 8.45974,
+        "p50": 19.886218,
+        "p75": 32.50109,
+        "p90": 60.36489,
+        "p95": 104.713275,
+        "p99": 265.407147,
+        "n": 485
+      }
+    },
+    "SECTOR:Utilities": {
+      "asset_turnover": {
+        "p1": 0.060367,
+        "p5": 0.098705,
+        "p10": 0.132007,
+        "p25": 0.175771,
+        "p50": 0.210442,
+        "p75": 0.366169,
+        "p90": 0.718525,
+        "p95": 1.010422,
+        "p99": 1.140405,
+        "n": 214
+      },
+      "current_ratio": {
+        "p1": 0.266445,
+        "p5": 0.451213,
+        "p10": 0.509756,
+        "p25": 0.644558,
+        "p50": 0.789832,
+        "p75": 1.019705,
+        "p90": 1.26114,
+        "p95": 1.608133,
+        "p99": 2.659889,
+        "n": 214
+      },
+      "debt_ratio": {
+        "p1": 0.291121,
+        "p5": 0.362948,
+        "p10": 0.489626,
+        "p25": 0.639762,
+        "p50": 0.715229,
+        "p75": 0.753043,
+        "p90": 0.792688,
+        "p95": 0.839623,
+        "p99": 0.890498,
+        "n": 214
+      },
+      "equity_to_assets": {
+        "p1": 6.525936,
+        "p5": 12.830522,
+        "p10": 19.042691,
+        "p25": 23.469617,
+        "p50": 27.285552,
+        "p75": 34.532706,
+        "p90": 50.633771,
+        "p95": 63.529389,
+        "p99": 70.790756,
+        "n": 214
+      },
+      "fcf_margin": {
+        "p1": -442.159111,
+        "p5": -132.537015,
+        "p10": -44.124122,
+        "p25": -19.35479,
+        "p50": -6.793333,
+        "p75": 3.701558,
+        "p90": 17.935625,
+        "p95": 26.993351,
+        "p99": 51.523518,
+        "n": 214
+      },
+      "interest_coverage": {
+        "p1": -1.008644,
+        "p5": 0.916518,
+        "p10": 1.341878,
+        "p25": 2.203212,
+        "p50": 2.732249,
+        "p75": 3.579125,
+        "p90": 8.407642,
+        "p95": 21.32882,
+        "p99": 284.881149,
+        "n": 214
+      },
+      "inventory_turnover": {
+        "p1": 1.004429,
+        "p5": 3.451275,
+        "p10": 4.279487,
+        "p25": 5.726396,
+        "p50": 7.99387,
+        "p75": 15.229148,
+        "p90": 23.363877,
+        "p95": 36.469431,
+        "p99": 104.471288,
+        "n": 182
+      },
+      "net_debt_to_ebitda": {
+        "p1": -1.681334,
+        "p5": 0.543243,
+        "p10": 1.775988,
+        "p25": 4.39978,
+        "p50": 5.677099,
+        "p75": 6.426499,
+        "p90": 8.324427,
+        "p95": 9.458953,
+        "p99": 19.265476,
+        "n": 214
+      },
+      "net_income_cagr": {
+        "p1": -23.384983,
+        "p5": -11.385207,
+        "p10": -4.559813,
+        "p25": 3.41488,
+        "p50": 10.673161,
+        "p75": 24.384618,
+        "p90": 65.509501,
+        "p95": 95.122597,
+        "p99": 242.766324,
+        "n": 137
+      },
+      "net_margin": {
+        "p1": -8.868515,
+        "p5": -0.883651,
+        "p10": 4.148354,
+        "p25": 8.804446,
+        "p50": 12.509851,
+        "p75": 16.442499,
+        "p90": 24.564668,
+        "p95": 35.102632,
+        "p99": 47.335849,
+        "n": 214
+      },
+      "ocf_to_current_liabilities": {
+        "p1": -0.264168,
+        "p5": 0.150693,
+        "p10": 0.232056,
+        "p25": 0.344763,
+        "p50": 0.524685,
+        "p75": 0.644411,
+        "p90": 0.857996,
+        "p95": 1.00538,
+        "p99": 1.420853,
+        "n": 214
+      },
+      "operating_income_cagr": {
+        "p1": -25.745953,
+        "p5": -9.612608,
+        "p10": -4.385241,
+        "p25": 4.973185,
+        "p50": 12.718466,
+        "p75": 27.281851,
+        "p90": 52.748589,
+        "p95": 100.153036,
+        "p99": 205.905959,
+        "n": 151
+      },
+      "operating_margin": {
+        "p1": -3.383347,
+        "p5": 7.799355,
+        "p10": 9.988048,
+        "p25": 16.456366,
+        "p50": 20.333914,
+        "p75": 26.413068,
+        "p90": 43.573931,
+        "p95": 57.995679,
+        "p99": 62.697225,
+        "n": 214
+      },
+      "receivables_turnover": {
+        "p1": 1.85284,
+        "p5": 3.328983,
+        "p10": 4.527049,
+        "p25": 6.365743,
+        "p50": 8.173561,
+        "p75": 12.120078,
+        "p90": 17.161638,
+        "p95": 21.268464,
+        "p99": 902.368502,
+        "n": 214
+      },
+      "revenue_cagr": {
+        "p1": -19.514019,
+        "p5": -8.645323,
+        "p10": -6.436964,
+        "p25": -1.459509,
+        "p50": 2.622119,
+        "p75": 8.851734,
+        "p90": 17.064383,
+        "p95": 27.879361,
+        "p99": 198.594818,
+        "n": 160
+      },
+      "roa": {
+        "p1": -3.649417,
+        "p5": -0.468096,
+        "p10": 1.08005,
+        "p25": 2.097791,
+        "p50": 2.777208,
+        "p75": 4.037753,
+        "p90": 7.432143,
+        "p95": 10.356201,
+        "p99": 14.606187,
+        "n": 214
+      },
+      "roce": {
+        "p1": -0.647977,
+        "p5": 2.905165,
+        "p10": 3.931908,
+        "p25": 5.010078,
+        "p50": 5.913512,
+        "p75": 9.379081,
+        "p90": 15.525076,
+        "p95": 20.925471,
+        "p99": 32.299044,
+        "n": 214
+      },
+      "roe": {
+        "p1": -17.139913,
+        "p5": -2.051686,
+        "p10": 4.087397,
+        "p25": 8.179718,
+        "p50": 10.413631,
+        "p75": 13.142743,
+        "p90": 19.19532,
+        "p95": 28.573665,
+        "p99": 47.968941,
+        "n": 214
+      }
+    }
+  },
+  "interpretation_bands": [
+    {
+      "min": 60.64,
+      "label": "TOP QUARTILE"
+    },
+    {
+      "min": 49.09,
+      "label": "ABOVE MEDIAN"
+    },
+    {
+      "min": 39.68,
+      "label": "BELOW MEDIAN"
+    },
+    {
+      "min": 0,
+      "label": "BOTTOM QUARTILE"
+    }
+  ],
+  "grade_bands": {
+    "PROFITABILITY": [
+      {
+        "grade": "A",
+        "min": 81.98
+      },
+      {
+        "grade": "B",
+        "min": 63.55
+      },
+      {
+        "grade": "C",
+        "min": 38.43
+      },
+      {
+        "grade": "D",
+        "min": 21.45
+      },
+      {
+        "grade": "F",
+        "min": 0
+      }
+    ],
+    "LIQUIDITY": [
+      {
+        "grade": "A",
+        "min": 83.08
+      },
+      {
+        "grade": "B",
+        "min": 60.34
+      },
+      {
+        "grade": "C",
+        "min": 35.85
+      },
+      {
+        "grade": "D",
+        "min": 22.4
+      },
+      {
+        "grade": "F",
+        "min": 0
+      }
+    ],
+    "SOLVENCY": [
+      {
+        "grade": "A",
+        "min": 87.9
+      },
+      {
+        "grade": "B",
+        "min": 65.56
+      },
+      {
+        "grade": "C",
+        "min": 33.97
+      },
+      {
+        "grade": "D",
+        "min": 17.65
+      },
+      {
+        "grade": "F",
+        "min": 0
+      }
+    ],
+    "EFFICIENCY": [
+      {
+        "grade": "A",
+        "min": 81.82
+      },
+      {
+        "grade": "B",
+        "min": 61.73
+      },
+      {
+        "grade": "C",
+        "min": 35.21
+      },
+      {
+        "grade": "D",
+        "min": 16.9
+      },
+      {
+        "grade": "F",
+        "min": 0
+      }
+    ],
+    "GROWTH": [
+      {
+        "grade": "A",
+        "min": 83.05
+      },
+      {
+        "grade": "B",
+        "min": 65.19
+      },
+      {
+        "grade": "C",
+        "min": 34.89
+      },
+      {
+        "grade": "D",
+        "min": 18.32
+      },
+      {
+        "grade": "F",
+        "min": 0
+      }
+    ]
+  },
+  "redundancy_rule": "Metrics sharing a pillar must have |Spearman rho| < 0.7 over the universe (checked by the calibration). Net debt / EBITDA was replaced by the debt ratio because its correlation with interest coverage was -0.72 (double counting); the debt ratio's is -0.51."
+}

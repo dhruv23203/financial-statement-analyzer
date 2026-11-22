@@ -240,7 +240,7 @@ def field_descriptions() -> dict[str, str]:
                          "market_cap": "Market capitalisation (trading currency, latest "
                                        "snapshot)",
                          "fiscal_year_end": "Latest fiscal year end"})
-    for category in ("liquidity", "solvency", "profitability", "efficiency", "cash_flow"):
+    for category in ("liquidity", "solvency", "profitability", "efficiency", "growth"):
         descriptions[f"{category}_score"] = f"{category.replace('_', ' ').title()} category score"
     for short, full in SHORT_NAMES.items():
         descriptions[short] = f"alias for {full}"

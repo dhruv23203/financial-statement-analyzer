@@ -103,7 +103,7 @@ def load_stored_analysis(ctx: AppContext, raw_ticker: str) -> StoredAnalysis:
         for s in repo.health_scores_for_run(session, run.id):
             scores.setdefault(s.fiscal_period_end, []).append(CategoryScore(
                 s.category, s.fiscal_period_end, s.score, s.status, s.data_coverage,
-                s.explanation, [], s.interpretation))
+                s.explanation, list(s.components or []), s.interpretation))
         analysed_periods = {o.period for o in ratios}
         facts = repo.standardized_facts_for_run(session, run.fetch_run_id, FREQ_ANNUAL,
                                                 mapped_only=True)

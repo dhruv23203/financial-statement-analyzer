@@ -22,7 +22,8 @@ from app.analysis.trends import TrendOutcome
 from app.database.models import CALC_NOT_MEANINGFUL
 from app.utils.helpers import fmt_amount, fmt_number
 
-CATEGORY_ORDER = ("LIQUIDITY", "SOLVENCY", "PROFITABILITY", "EFFICIENCY", "CASH_FLOW")
+CATEGORY_ORDER = ("LIQUIDITY", "SOLVENCY", "PROFITABILITY", "EFFICIENCY", "CASH_FLOW",
+                  "GROWTH")
 RATIO_TABLE_ORDER = (*CATEGORY_ORDER, "SHAREHOLDER", "VALUATION", "BENCHMARK")
 METHOD_MARKERS = {"ENDING_BALANCE_FALLBACK": "e", "EBIT_PROXY_OPERATING_INCOME": "p",
                   "OCF_MINUS_CAPEX": "c"}

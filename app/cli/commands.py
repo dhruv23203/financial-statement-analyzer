@@ -433,6 +433,19 @@ def cmd_analyze_universe(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_calibrate_framework(args: argparse.Namespace) -> int:
+    """Health Score 3.0: peer benchmarks, bands, grades and validation evidence."""
+    from app.calibration import framework_calibration
+
+    evidence = framework_calibration.run(_context(args), write=True, progress=out)
+    d = evidence["discrimination"]
+    out(f"Calibrated {evidence['companies']} companies ({evidence['company_years']} "
+        f"company-years, {evidence['scored_share']:.0%} scored).")
+    out(f"AUC {d.get('auc_score')} vs two-ratio baseline {d.get('auc_two_ratio_baseline')} "
+        f"(in-sample, proxy label). Re-run: python main.py analyze-universe")
+    return 0
+
+
 def cmd_sensitivity(args: argparse.Namespace) -> int:
     """How much the overall score depends on the category weights (stored scores only)."""
     import json
@@ -651,6 +664,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("tickers", nargs="+")
     add("analyze-universe", cmd_analyze_universe,
         "analyse every reference-universe company (for the screener)")
+    add("calibrate-framework", cmd_calibrate_framework,
+        "Health Score 3.0: industry peer benchmarks, bands, grades and validation")
     p = add("calibrate", cmd_calibrate,
             "derive score breakpoints, weights and red-flag thresholds from a reference universe")
     p.add_argument("--fetch", action="store_true", help="download universe companies not yet stored")

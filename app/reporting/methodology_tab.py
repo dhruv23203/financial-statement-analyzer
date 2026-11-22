@@ -126,27 +126,7 @@ def render_methodology_tab(scoring: dict[str, Any], red_flags: dict[str, Any]) -
     st.markdown("**How to read a ratio cell**")
     st.dataframe(RATIO_STATUSES, hide_index=True, width="stretch")
 
-    calibration = scoring.get("calibration") or {}
-    st.markdown(ui.section("Financial health score",
-                           f"methodology v{scoring.get('methodology_version', '?')}"),
-                unsafe_allow_html=True)
-    bands = ", ".join(f"{b['label'].title()} >= {b['min']}" for b in
-                      sorted(scoring["interpretation_bands"], key=lambda b: -b["min"]))
-    st.markdown(
-        f"1. **Ratio -> points (0-100):** percentile breakpoints of the reference universe "
-        f"({calibration.get('companies', '?')} companies, {calibration.get('company_years', '?')} "
-        "company-years), within the company's sector when the sector is large enough.\n"
-        f"2. **Category score:** weighted average of the available ratio points (ratio weights: "
-        f"{calibration.get('ratio_weight_method', 'CRITIC')}). A category needs at least "
-        f"{float(scoring['min_category_coverage']):.0%} of its weight or of its ratios.\n"
-        f"3. **Overall score:** weighted average of the scored categories (category weights: "
-        f"{calibration.get('category_weight_method', '?')}); at least "
-        f"{scoring['min_categories_for_overall']} categories are required, otherwise N/A.\n"
-        f"4. **Bands** (quartiles of the universe): {bands}.")
-    st.dataframe(weight_table(scoring), hide_index=True, width="stretch")
-    st.caption("Liquidity has weight 0: in the calibration it added no predictive information "
-               "once the other categories were known (coefficient CI spans zero). It is still "
-               "shown, graded and checked by red flag RF05.")
+    render_health_framework()
 
     st.markdown(ui.section("Red-flag rules", f"thresholds v{red_flags.get('version', '?')}"),
                 unsafe_allow_html=True)
@@ -163,9 +143,97 @@ def render_methodology_tab(scoring: dict[str, Any], red_flags: dict[str, Any]) -
     st.markdown(ui.section("Data and limitations"), unsafe_allow_html=True)
     for item in LIMITATIONS:
         st.markdown(f"- {item}")
-    st.caption("Full documentation in the project repository: docs/SCORING_METHODOLOGY.md, "
+    st.caption("Full documentation in the project repository: docs/HEALTH_SCORE_FRAMEWORK.md, "
                "docs/RED_FLAG_METHODOLOGY.md, docs/FINANCIAL_FORMULAS.md, "
                "docs/DATA_VALIDATION.md, docs/AUDIT_REPORT.md.")
+
+
+def framework_table(config: dict[str, Any]) -> pd.DataFrame:
+    """Each industry framework: pillar budgets and the metrics (with their points)."""
+    rows = []
+    for key, fw in config["frameworks"].items():
+        row = {"Framework": fw["label"]}
+        for pillar in config["pillars"]:
+            spec = fw["pillars"][pillar]
+            if not spec.get("max"):
+                row[pillar.title()] = "not assessed"
+                continue
+            total = sum(spec["metrics"].values())
+            row[pillar.title()] = f"{spec['max']}: " + ", ".join(
+                f"{config['metrics'][m]['name']} {spec['max'] * w / total:.0f}"
+                for m, w in spec["metrics"].items())
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def guardrail_table(config: dict[str, Any]) -> pd.DataFrame:
+    rows = []
+    for fw in config["frameworks"].values():
+        for g in fw.get("guardrails", []):
+            cond = f"< {g['below']}" if "below" in g else f"> {g['above']}"
+            rows.append({"Framework": fw["label"], "Metric": config["metrics"][g["metric"]]["name"],
+                         "Condition": cond, "Max share of the metric's points": f"{g['cap']:.0%}",
+                         "Why": g["reason"]})
+    return pd.DataFrame(rows)
+
+
+def render_health_framework() -> None:
+    from app.analysis.health_framework import load_framework
+
+    cfg = load_framework()
+    st.markdown(ui.section("Financial Health Score", f"methodology v{cfg['version']} - "
+                                                     "industry frameworks"),
+                unsafe_allow_html=True)
+    bands = ", ".join(f"{b['label'].title()} >= {b['min']}" for b in
+                      sorted(cfg.get("interpretation_bands") or [], key=lambda b: -b["min"]))
+    st.markdown(
+        "1. **Framework:** the company's industry decides the metrics, budgets and guardrails "
+        "(table below). Banks, insurers and other financial companies are scored on "
+        "profitability, capital and growth; their liquidity and efficiency are *not "
+        "assessed* because the data provider does not report deposits, loans, NPAs or "
+        "claims - nothing is guessed.\n"
+        "2. **Metric points:** the metric's percentile among industry peers (same sector, or "
+        f"same financial framework; at least {cfg['min_peer_observations']} peer observations, "
+        "else the wider group) times the metric's points. Lower-is-better metrics are mirrored.\n"
+        "3. **Guardrails:** absolute minimum standards can only lower points (so a weak "
+        "company does not score well just because its peers are weak).\n"
+        f"4. **Pillar:** budget x weighted average of the measured metrics, if at least "
+        f"{cfg['min_pillar_coverage']:.0%} of its metric weight is measured. Missing data never "
+        "earns points.\n"
+        f"5. **Overall:** points earned / points assessable x 100; withheld when less than "
+        f"{cfg['min_assessed_share']:.0%} of the budget or fewer than {cfg['min_pillars']} "
+        "pillars can be assessed. **Confidence** = share of the framework's weight measured.\n"
+        f"6. **Bands** (universe quartiles): {bands}.")
+    st.dataframe(framework_table(cfg), hide_index=True, width="stretch")
+    st.caption("Budgets (25/20/20/15/20 for non-financial companies) are a declared design, "
+               "not fitted to any outcome. Metrics sharing a pillar are kept below |0.7| "
+               "Spearman correlation to avoid double counting.")
+    with st.expander("Guardrails (absolute thresholds)"):
+        st.dataframe(guardrail_table(cfg), hide_index=True, width="stretch")
+    ev_path = CONFIG_DIR / "validation_evidence.json"
+    ev = json.loads(ev_path.read_text(encoding="utf-8")).get("health_framework_v3")         if ev_path.is_file() else None
+    if ev:
+        d, sens = ev["discrimination"], ev["sensitivity"]
+        quint = " -> ".join(f"{v:.1%}" for _, v in sorted(d["distress_rate_by_quintile"].items(),
+                                                          key=lambda kv: int(kv[0])))
+        st.markdown(ui.cards([
+            ("Companies scored", f"{ev['scored_share']:.0%}",
+             f"{ev['company_years']:,} company-years, {ev['companies']} companies", None),
+            ("Distress rate by score quintile", quint.split(" -> ")[0] + " ... " +
+             quint.split(" -> ")[-1], "lowest -> highest quintile", None),
+            ("AUC (in-sample)", f"{d['auc_score']:.2f}",
+             f"two-ratio baseline {d['auc_two_ratio_baseline']:.2f}", None),
+            ("Budget sensitivity", f"{sens['spearman_rank_correlation']:.3f}",
+             "rank correlation with equal budgets", None)]), unsafe_allow_html=True)
+        max_rho = max((abs(r["spearman"]) for r in ev["redundancy"]), default=0)
+        st.caption(
+            f"Validation ({ev['generated_at']}): next-year distress (net loss or negative OCF) "
+            f"falls across score quintiles ({quint}), so the score orders risk monotonically. "
+            f"Its AUC of {d['auc_score']:.2f} is below a simple two-ratio rule "
+            f"({d['auc_two_ratio_baseline']:.2f}): the score is a broad, explainable health "
+            "summary, not a tuned distress predictor, and no predictive accuracy is claimed. "
+            f"Largest within-pillar metric correlation: {max_rho:.2f}. Benchmarks are pooled "
+            "over all years (in-sample); universe = today's index members (survivorship).")
 
 
 def render_validation_evidence() -> None:

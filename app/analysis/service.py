@@ -15,7 +15,9 @@ from pathlib import Path
 from typing import Any
 
 from app.analysis.config_loader import load_red_flag_config, load_scoring_config
-from app.analysis.health_score import OVERALL, CategoryScore, score_all_periods
+from app.analysis.health_framework import load_framework
+from app.analysis.health_framework import score_all as framework_scores
+from app.analysis.health_score import OVERALL, CategoryScore
 from app.analysis.insights import generate_insights, grade_for
 from app.analysis.ratios import (RATIO_DEFINITIONS, FinancialDataset, RatioOutcome,
                                  calculate_all_ratios, index_outcomes)
@@ -92,7 +94,7 @@ def load_dataset(ctx: AppContext, ticker: str) -> tuple[FinancialDataset, dict[s
                               "fetched_at": snapshot.fetched_at.date().isoformat(),
                               "provider_values": snapshot.provider_values or {}}
         info = {"company_id": company.id, "fetch_run_id": run.id, "name": company.name,
-                "sector": company.sector,
+                "sector": company.sector, "industry": company.industry,
                 "currency_check": (run.fetch_metadata or {}).get("currency_check") or {}}
     dataset.exclude_sparse_periods()
     if not dataset.periods:
@@ -112,7 +114,7 @@ def analyze_company(ctx: AppContext, raw_ticker: str, write_outputs: bool = True
         run = AnalysisRun(company_id=info["company_id"], fetch_run_id=info["fetch_run_id"],
                           executed_at=utcnow(), status=RUN_RUNNING,
                           methodology_version=ANALYSIS_METHODOLOGY_VERSION,
-                          scoring_methodology_version=scoring_config["methodology_version"],
+                          scoring_methodology_version=load_framework()["version"],
                           red_flag_config_version=str(red_flag_config["version"]),
                           currency=dataset.currency, latest_fiscal_period=dataset.periods[-1])
         session.add(run)
@@ -125,14 +127,18 @@ def analyze_company(ctx: AppContext, raw_ticker: str, write_outputs: bool = True
         ratio_index = index_outcomes(ratios)
         trends = analyse_trends(dataset)
         flags = detect_red_flags(dataset, ratio_index, red_flag_config, info["sector"])
-        scores = score_all_periods(dataset.periods, ratio_index, scoring_config,
-                                   info["sector"])
+        # Financial Health Score 3.0: industry framework, peer-relative metrics with
+        # absolute guardrails (app/analysis/health_framework.py). The v2.1 scoring config is
+        # still used for the rule-based pros/cons text (its peer percentile curves).
+        framework_config = load_framework()
+        scores = framework_scores(dataset, ratio_index, info["sector"], info.get("industry"),
+                                  framework_config)
         report = AnalysisReport(
             ticker=ticker, company_name=info["name"], sector=info["sector"],
             currency=dataset.currency, analysis_run_id=run_id,
             fetch_run_id=info["fetch_run_id"], status=RUN_SUCCESS, dataset=dataset,
             ratios=ratios, trends=trends, red_flags=flags, scores=scores,
-            scoring_version=scoring_config["methodology_version"],
+            scoring_version=framework_config["version"],
             red_flag_version=str(red_flag_config["version"]),
             unavailable_trends=unavailable_trend_metrics(dataset),
             currency_check=info["currency_check"])
@@ -140,7 +146,7 @@ def analyze_company(ctx: AppContext, raw_ticker: str, write_outputs: bool = True
         insights = generate_insights(ratios, trends, flags.flags, scoring_config, info["sector"],
                                      dataset.periods[-1])
         report.pros, report.cons = insights.pros, insights.cons
-        report.grades = {c.category: grade_for(c.category, c.score, scoring_config)
+        report.grades = {c.category: grade_for(c.category, c.score, framework_config)
                          for c in report.latest_scores()}
         overall = report.overall()
         report.status = RUN_SUCCESS if overall and overall.score is not None else RUN_PARTIAL
@@ -256,7 +262,8 @@ def _persist(ctx: AppContext, report: AnalysisReport, company_id: int) -> None:
                     score=c.score, status=c.status, data_coverage=c.coverage,
                     interpretation=c.interpretation, methodology_version=report.scoring_version,
                     explanation=c.explanation,
-                    components=to_jsonable([vars(m) for m in c.components]) or None))
+                    components=to_jsonable([m if isinstance(m, dict) else vars(m)
+                                            for m in c.components]) or None))
         run.status = report.status
         run.completed_at = utcnow()
         run.summary = _summary(report)

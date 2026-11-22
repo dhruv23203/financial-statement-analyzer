@@ -21,7 +21,8 @@ from app.analysis.comparison import RATIO_METRICS as COMPARISON_RATIOS
 from app.analysis.comparison import (amounts_frame, compare_companies, period_labels,
                                      ratios_frame, summary_frame)
 from app.analysis.ratios import RATIO_DEFINITIONS
-from app.reporting import plots, tables, ui
+from app.analysis.health_framework import load_framework
+from app.reporting import health_view, plots, tables, ui
 from app.reporting.advisor_tabs import render_advisor_tab, render_portfolio_tab
 from app.reporting.methodology_tab import render_methodology_tab
 from app.services import quarterly
@@ -44,7 +45,7 @@ st.markdown(ui.CSS, unsafe_allow_html=True)
 PROVIDERS = {"Yahoo Finance (live)": "yfinance", "Offline sample data": "sample"}
 METRIC_LABELS = {"total_revenue": "Revenue", "net_income": "Net income",
                  "operating_cash_flow": "Operating cash flow", "total_debt": "Total debt"}
-CATEGORIES = ("PROFITABILITY", "CASH_FLOW", "EFFICIENCY", "SOLVENCY", "LIQUIDITY")
+CATEGORIES = ("PROFITABILITY", "LIQUIDITY", "SOLVENCY", "EFFICIENCY", "GROWTH")
 PRICE_RANGES = {"1M": "1mo", "6M": "6mo", "1Y": "1y", "5Y": "5y", "Max": "max"}
 KEY_RATIOS = (("return_on_equity", "ROE"), ("return_on_capital_employed", "ROCE"),
               ("net_profit_margin", "Net margin"), ("debt_to_equity", "Debt / equity"),
@@ -200,10 +201,12 @@ METRIC_HELP = {
     "Beneish M": "Beneish (1999) M-Score: above -1.78 resembles past earnings manipulators. "
                  "Many false positives (fast growth, acquisitions) - a screening signal, "
                  "never proof of manipulation. Not applicable to banks/insurers.",
-    "Health score": "Our 0-100 Financial Health Score: weighted average of the category "
-                    "scores; each ratio is scored by its percentile among sector peers.",
-    "Data coverage": "Share of the score's weighted inputs that were available. Missing "
-                     "data never earns points; it lowers coverage.",
+    "Health score": "Our 0-100 Financial Health Score (3.0): points earned in five pillars "
+                    "(profitability, liquidity, solvency, efficiency, growth) under the "
+                    "company's industry framework; each metric is scored by its percentile "
+                    "among industry peers, capped by absolute guardrails.",
+    "Data coverage": "Confidence: share of the industry framework's weight that was "
+                     "actually measured. Missing data never earns points; it lowers this.",
     "Red flags (latest)": "Rules triggered in the latest fiscal year. See the Red flags "
                           "section for rules that could not be evaluated.",
     "Ratios calculated": "Ratios with a value across all years. The rest are N/A (missing "
@@ -372,8 +375,7 @@ def render_scorecard(analysis: StoredAnalysis) -> None:
     cats = {c.category: c for c in analysis.latest_scores() if c.category != "OVERALL"}
     grades = {k: v for k, v in (analysis.summary.get("grades") or {}).items() if v}
     scored_cats = [c for c in cats.values() if c.score is not None]
-    min_categories = int(scoring_settings(str(ctx.settings.scoring_config_file))[
-        "min_categories_for_overall"])
+    min_categories = int(load_framework()["min_pillars"])
     g_col, r_col, k_col = st.columns([1, 1.15, 1.25], gap="medium")
     with g_col:
         chart(plots.score_gauge(score, "Health score"), key="gauge")
@@ -381,12 +383,8 @@ def render_scorecard(analysis: StoredAnalysis) -> None:
             ui.NA_TEXT
         html(f'<div style="text-align:center;margin-top:-.6rem">'
              f'{ui.pill(interpretation, ui.score_color(score))}</div>')
-        if score is None and analysis.sector and "financial" in analysis.sector.lower():
-            st.caption("Banks, insurers and other lenders are not scored: deposits and loans "
-                       "are their operating assets and liabilities, so working-capital "
-                       "liquidity, asset turnover and operating cash flow do not measure "
-                       "their health. Bank-specific measures (capital adequacy, NPA ratio, "
-                       "net interest margin) are planned for Semester 2.")
+        if score is None and overall is not None:
+            st.caption(overall.explanation)
     with r_col:
         snowflake = {c: (None if cats.get(c) is None or cats[c].score is None
                          else float(cats[c].score)) for c in CATEGORIES}
@@ -618,8 +616,10 @@ def render_company(analysis: StoredAnalysis) -> None:
             chart(plots.price_chart(prices, style), key="price")
 
     render_glance(analysis)
-    html(ui.section("Financial health", "our 0-100 score, its five categories and grades"))
+    html(ui.section("Financial health", "industry framework, five pillars, every point "
+                                        "explained"))
     render_scorecard(analysis)
+    health_view.render(analysis)
     render_key_numbers(analysis)
 
     pros, cons = analysis.summary.get("pros") or [], analysis.summary.get("cons") or []
@@ -865,7 +865,7 @@ with tab_screen:
 
 # ---------------------------------------------------------------------------- market map tab
 COLOR_FIELDS = {"score": "Overall score", "profitability_score": "Profitability",
-                "cash_flow_score": "Cash flow", "solvency_score": "Solvency",
+                "growth_score": "Growth", "solvency_score": "Solvency",
                 "efficiency_score": "Efficiency", "liquidity_score": "Liquidity"}
 SCATTER_FIELDS = {"price_to_earnings": "P/E", "return_on_equity": "ROE %",
                   "return_on_capital_employed": "ROCE %", "net_profit_margin": "Net margin %",
