@@ -28,7 +28,7 @@ from app.reporting.methodology_tab import render_methodology_tab
 from app.database.validation import validate_database
 from app.services import archive, quarterly
 from app.services.data_status import as_rows as data_status_rows
-from app.services.data_status import data_status
+from app.services.data_status import data_status, universe_price_freshness
 from app.services.context import AppContext, build_context
 from app.services.pipeline import company_history, run_pipeline
 from app.services.screener import (data_marker, field_descriptions, find_peers,
@@ -83,6 +83,11 @@ class _Uncached(Exception):
 @st.cache_data(show_spinner="Loading company data ...")
 def cached_screen_frame(provider: str, db_path: str, marker: str) -> pd.DataFrame:
     return screen_frame(get_context(provider))
+
+
+@st.cache_data(show_spinner=False)
+def cached_price_freshness(provider: str, db_path: str, marker: str) -> dict:
+    return universe_price_freshness(get_context(provider))
 
 
 @st.cache_data(show_spinner=False)
@@ -316,7 +321,9 @@ if not _tape_frame.empty and "score" in _tape_frame:
      "🗄️ Database"])
 
 with tab_overview:
-    overview_tab.render(companies, selected)
+    overview_tab.render(companies, selected,
+                        freshness=cached_price_freshness(PROVIDER, DB_KEY, MARKER),
+                        bands=[{"min": m, "label": label} for m, label, _ in ui.score_bands()])
 
 
 # ---------------------------------------------------------------------------- company tab

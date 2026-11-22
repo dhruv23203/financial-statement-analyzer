@@ -154,3 +154,23 @@ def as_rows(s: DataStatus) -> list[dict[str, Any]]:
         {"Item": "Reporting currency", "Value": f"{s.currency} (label check: "
                                                 f"{s.currency_check or 'n/a'})"},
     ]
+
+
+def universe_price_freshness(ctx: AppContext, today: date | None = None) -> dict[str, Any]:
+    """Across all companies: the newest stored price date, how many companies have a
+    stored price, and how many of those prices are older than PRICE_STALE_DAYS."""
+    from sqlalchemy import select
+
+    from app.database.models import MarketSnapshot
+
+    today = today or datetime.now(timezone.utc).date()
+    latest: dict[int, Any] = {}
+    with ctx.db.session_scope() as session:
+        for snap in session.scalars(select(MarketSnapshot).where(
+                MarketSnapshot.status == RUN_SUCCESS, MarketSnapshot.price.is_not(None))
+                .order_by(MarketSnapshot.fetched_at, MarketSnapshot.id)):
+            latest[snap.company_id] = repo.snapshot_price_date(snap)
+    dates = [d for d in latest.values() if d]
+    stale = sum(1 for d in dates if (today - date.fromisoformat(d)).days > PRICE_STALE_DAYS)
+    return {"priced": len(dates), "latest_price_date": max(dates) if dates else None,
+            "stale_prices": stale if dates else None, "stale_days": PRICE_STALE_DAYS}
