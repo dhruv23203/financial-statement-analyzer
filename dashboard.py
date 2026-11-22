@@ -25,7 +25,10 @@ from app.analysis.health_framework import load_framework
 from app.reporting import health_view, plots, tables, ui
 from app.reporting.advisor_tabs import render_advisor_tab, render_portfolio_tab
 from app.reporting.methodology_tab import render_methodology_tab
-from app.services import quarterly
+from app.database.validation import validate_database
+from app.services import archive, quarterly
+from app.services.data_status import as_rows as data_status_rows
+from app.services.data_status import data_status
 from app.services.context import AppContext, build_context
 from app.services.pipeline import company_history, run_pipeline
 from app.services.screener import (data_marker, field_descriptions, find_peers,
@@ -592,6 +595,36 @@ def render_quarterly(analysis: StoredAnalysis) -> None:
                "reported - otherwise N/A. Display only: not used in the health score.")
 
 
+@st.cache_data(show_spinner=False)
+def cached_data_status(provider: str, db_path: str, marker: str, ticker: str):
+    return data_status(get_context(provider), ticker)
+
+
+def render_data_status(ticker: str) -> None:
+    """Source, reporting date, price date, freshness and completeness - one line, with the
+    detail on demand."""
+    s = cached_data_status(PROVIDER, DB_KEY, MARKER, ticker)
+    if s is None:
+        return
+    price = (f"price {s.price_date} ({s.price_age_days} d, {s.price_freshness.lower()})"
+             if s.price_date else "no stored price")
+    html(ui.glance([
+        ("Source", s.source_label.split(" (")[0], None),
+        ("Statements", f"FY to {s.latest_period} · {s.statement_freshness}",
+         ui.DOWN if s.statement_freshness == "Stale" else None),
+        ("Market", price, ui.DOWN if s.price_freshness == "Stale" else None),
+        ("Completeness", f"{s.completeness:.0%} · {s.fiscal_years} yrs",
+         ui.DOWN if s.completeness < 0.75 else None)]))
+    with st.expander("Data sources, dates and completeness"):
+        show_table(pd.DataFrame(data_status_rows(s)))
+        for note in s.notes:
+            st.caption(f"Note: {note}")
+        st.caption("Annual statements stay 'current' for 15 months after the fiscal year-end "
+                   "(the next annual report is not due before then). Prices are 'fresh' up "
+                   "to 4 days old (weekends, holidays) and 'stale' after 10. Missing lines "
+                   "are listed, never filled in.")
+
+
 def render_company(analysis: StoredAnalysis) -> None:
     check = analysis.currency_check
     live = PROVIDER == "yfinance"
@@ -601,6 +634,7 @@ def render_company(analysis: StoredAnalysis) -> None:
     prices = (cached_prices(PROVIDER, analysis.ticker, PRICE_RANGES[range_label]) if live
               else pd.DataFrame())
     render_header(analysis, prices, range_label)
+    render_data_status(analysis.ticker)
     if check.get("status") in ("FAILED", "OVERRIDDEN"):
         (st.error if check["status"] == "FAILED" else st.info)(check.get("message", ""))
     if live:
@@ -972,6 +1006,56 @@ with tab_db:
         "configured, so companies added there are lost when the app restarts, sleeps or is "
         "redeployed, and the preloaded database is restored. Download a backup below to keep "
         "a copy.")
+
+    st.subheader("Keep the companies you added (archive)")
+    st.caption("Exports the original statements, metadata and dated price of companies "
+               "added since the app started into a small zip. After a restart, restore it "
+               "here: the normal pipeline re-runs offline with every validation rule, and the "
+               "source is labelled 'Restored archive (user-supplied, not re-verified)'. "
+               "Existing records are never overwritten.")
+    a1, a2 = st.columns(2)
+    added_tickers = [c["ticker"] for c in added]
+    with a1:
+        if added_tickers and st.button(f"Prepare archive of {len(added_tickers)} added "
+                                       "compan" + ("y" if len(added_tickers) == 1 else "ies")):
+            try:
+                data, status = archive.export_archive(ctx, added_tickers)
+            except AnalyzerError as exc:
+                st.error(friendly_error(exc))
+            else:
+                st.session_state["archive_bytes"] = data
+                st.session_state["archive_status"] = status
+        if st.session_state.get("archive_bytes"):
+            st.download_button("⬇ Download company archive (.zip)",
+                               st.session_state["archive_bytes"],
+                               file_name="fsa_company_archive.zip", mime="application/zip")
+            for t, msg in (st.session_state.get("archive_status") or {}).items():
+                st.caption(f"{t}: {msg}")
+        elif not added_tickers:
+            st.caption("No companies added since the app started.")
+    with a2:
+        upload = st.file_uploader("Restore an archive", type=["zip"], key="archive_upload")
+        if upload is not None and st.button("Restore companies from archive"):
+            with st.spinner("Validating and re-running the pipeline offline ..."):
+                try:
+                    result = archive.import_archive(ctx, upload.getvalue())
+                except AnalyzerError as exc:
+                    st.error(str(exc))
+                else:
+                    if result.restored:
+                        st.success(f"Restored: {', '.join(result.restored)}")
+                    for t, why in result.failed.items():
+                        st.warning(f"{t}: {why}")
+
+    st.subheader("Data validation")
+    st.caption("Content checks (duplicates, interrupted runs, impossible or stale values, "
+               "currency labels) - read-only; the full file check is below.")
+    if st.button("Validate stored data"):
+        with st.spinner("Checking the stored data ..."):
+            report = validate_database(ctx)
+        show_table(pd.DataFrame([{"Check": c.name, "Status": c.status, "Count": c.count,
+                                  "Examples": ", ".join(c.examples), "Meaning": c.detail}
+                                 for c in report]))
 
     st.subheader("Backup")
     st.caption("Creates a consistent copy with SQLite's online-backup API (safe while the app "

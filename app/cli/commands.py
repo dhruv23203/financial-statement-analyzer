@@ -433,6 +433,50 @@ def cmd_analyze_universe(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_db_validate(args: argparse.Namespace) -> int:
+    """Content checks: duplicates, interrupted runs, impossible or stale data, currency."""
+    from app.database.validation import FAIL, validate_database
+
+    checks = validate_database(_context(args))
+    for c in checks:
+        examples = f" e.g. {', '.join(c.examples)}" if c.examples else ""
+        out(f"[{c.status:4}] {c.name}: {c.count}{examples}")
+        if c.status != "OK":
+            out(f"       {c.detail}")
+    return 1 if any(c.status == FAIL for c in checks) else 0
+
+
+def cmd_prune_analyses(args: argparse.Namespace) -> int:
+    """Delete superseded analysis runs (keeps the newest N per company; backs up first)."""
+    from app.database.validation import prune_superseded_analyses
+
+    result = prune_superseded_analyses(_context(args), keep=args.keep)
+    out(f"Deleted {result['deleted_analysis_runs']} superseded analysis runs. "
+        f"Backup: {result['backup']}")
+    return 0
+
+
+def cmd_archive(args: argparse.Namespace) -> int:
+    """Export companies (original statements) to a zip, or restore one offline."""
+    from app.services import archive
+
+    ctx = _context(args)
+    if args.restore:
+        result = archive.import_archive(ctx, Path(args.restore).read_bytes())
+        out(f"Restored: {', '.join(result.restored) or 'none'}")
+        for t, why in result.failed.items():
+            out(f"Failed {t}: {why}")
+        return 0 if not result.failed else 1
+    data, status = archive.export_archive(ctx, args.tickers)
+    target = Path(args.output)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    for t, s in status.items():
+        out(f"{t}: {s}")
+    out(f"Saved {target}")
+    return 0
+
+
 def cmd_calibrate_framework(args: argparse.Namespace) -> int:
     """Health Score 3.0: peer benchmarks, bands, grades and validation evidence."""
     from app.calibration import framework_calibration
@@ -664,6 +708,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("tickers", nargs="+")
     add("analyze-universe", cmd_analyze_universe,
         "analyse every reference-universe company (for the screener)")
+    add("db-validate", cmd_db_validate,
+        "content checks: duplicates, interrupted runs, stale or impossible data, currency")
+    p = add("prune-analyses", cmd_prune_analyses,
+            "delete superseded analysis runs, keeping the newest N per company (backs up first)")
+    p.add_argument("--keep", type=int, default=3)
+    p = add("archive", cmd_archive, "export companies to a portable zip, or restore one")
+    p.add_argument("tickers", nargs="*", help="tickers to export")
+    p.add_argument("--output", default="exports/company_archive.zip")
+    p.add_argument("--restore", help="path of an archive zip to restore offline")
     add("calibrate-framework", cmd_calibrate_framework,
         "Health Score 3.0: industry peer benchmarks, bands, grades and validation")
     p = add("calibrate", cmd_calibrate,

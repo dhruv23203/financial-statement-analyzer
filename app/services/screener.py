@@ -60,8 +60,9 @@ def screen_frame(ctx: AppContext) -> pd.DataFrame:
     rows: dict[int, dict[str, Any]] = {}
     with ctx.db.session_scope() as session:
         latest_runs = {}
+        runs_by_company = repo.latest_analysis_runs(session)     # one query, not one per company
         for company in repo.list_companies(session):
-            run = repo.latest_analysis_run(session, company.id)
+            run = runs_by_company.get(company.id)
             if run is not None and run.latest_fiscal_period is not None:
                 latest_runs[run.id] = (company, run)
                 rows[run.id] = {"ticker": company.ticker, "name": company.name,

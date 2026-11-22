@@ -103,10 +103,12 @@ def _extras(ctx: AppContext, tickers: list[str]) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     with ctx.db.session_scope() as session:
         runs: dict[int, str] = {}
+        latest_runs = repo.latest_analysis_runs(session)         # batched queries
+        latest_snaps = repo.latest_market_snapshots(session)
         for company in repo.list_companies(session):
             if company.ticker not in tickers:
                 continue
-            run = repo.latest_analysis_run(session, company.id)
+            run = latest_runs.get(company.id)
             if run is None:
                 continue
             s = run.summary or {}
@@ -118,7 +120,7 @@ def _extras(ctx: AppContext, tickers: list[str]) -> dict[str, dict[str, Any]]:
                 "price_currency": None, "price_date": None,
             }
             runs[run.id] = company.ticker
-            snap = repo.latest_market_snapshot(session, company.id)
+            snap = latest_snaps.get(company.id)
             if snap is not None and snap.status == RUN_SUCCESS:
                 out[company.ticker]["price"] = _num(snap.price)
                 out[company.ticker]["shares"] = _num(snap.shares_outstanding)

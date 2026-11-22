@@ -15,6 +15,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from app.providers.base import FinancialDataProvider
@@ -47,6 +48,23 @@ def translate_exception(exc: Exception) -> ProviderError:
             or any(h in lowered for h in _NETWORK_HINTS)):
         return ProviderNetworkError(f"Network problem contacting Yahoo Finance: {message}")
     return ProviderError(f"Yahoo Finance error ({type(exc).__name__}): {message}")
+
+
+def clean_price_history(frame: pd.DataFrame, ticker: str = "") -> pd.DataFrame:
+    """Defensive clean-up of a provider price series: sorted dates, one row per date (the
+    last one wins), and no missing, non-finite or non-positive closes - a zero or negative
+    price is a data error, never a real quote. Removed rows are logged, not repaired."""
+    out = frame.sort_index()
+    duplicates = int(out.index.duplicated(keep="last").sum())
+    out = out[~out.index.duplicated(keep="last")]
+    close = pd.to_numeric(out["Close"], errors="coerce")
+    valid = close.notna() & np.isfinite(close) & (close > 0)
+    dropped = int((~valid).sum())
+    if duplicates or dropped:
+        logger.warning("Price history cleaned", extra={"ticker": ticker,
+                                                       "duplicate_dates": duplicates,
+                                                       "invalid_closes": dropped})
+    return out[valid]
 
 
 class YFinanceProvider(FinancialDataProvider):
@@ -114,7 +132,9 @@ class YFinanceProvider(FinancialDataProvider):
         if not isinstance(frame, pd.DataFrame) or frame.empty:
             return pd.DataFrame()
         columns = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in frame]
-        return frame[columns].dropna(subset=["Close"]) if "Close" in columns else pd.DataFrame()
+        if "Close" not in columns:
+            return pd.DataFrame()
+        return clean_price_history(frame[columns], ticker)
 
     def fetch_market_snapshot(self, ticker: str) -> dict[str, Any]:
         info = self._info(ticker)

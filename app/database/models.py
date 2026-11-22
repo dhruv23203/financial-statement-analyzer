@@ -219,6 +219,8 @@ class StandardizedFinancialFact(Base):
         CheckConstraint(_in("validation_status", VALIDATION_STATUSES), name="validation_valid"),
         Index("ix_std_facts_lookup", "company_id", "fetch_run_id", "metric_code",
               "fiscal_period_end"),
+        # queries by fetch run (valuation inputs, screener, calibration) - migration 0003
+        Index("ix_std_facts_run_metric", "fetch_run_id", "metric_code", "fiscal_period_end"),
     )
 
 

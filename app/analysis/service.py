@@ -197,6 +197,35 @@ def _notes(report: AnalysisReport) -> list[str]:
     return notes
 
 
+def _fcff_history(report: AnalysisReport) -> list[dict[str, Any]] | None:
+    from app.valuation import capm
+    from app.valuation.company import FINANCIAL_SECTORS, fcff_history
+    from app.valuation.dcf import ValuationError
+
+    if report.sector in FINANCIAL_SECTORS:
+        return None
+    try:
+        tax = capm.market_assumptions(report.currency)["statutory_tax_rate"]
+    except ValuationError:
+        return None
+    ds = report.dataset
+    periods = {p: {k: float(v) for k, v in ds.values[p].items() if v is not None}
+               for p in ds.periods}
+    return fcff_history(periods, tax, report.currency)
+
+
+def _completeness(report: AnalysisReport) -> dict[str, Any]:
+    from app.services.data_status import CORE_METRICS
+
+    ds = report.dataset
+    latest = ds.periods[-1] if ds.periods else None
+    present = sorted(c for c in CORE_METRICS if ds.get(latest, c) is not None)
+    return {"latest_period": latest, "present": present,
+            "missing": [c for c in CORE_METRICS if c not in present],
+            "fiscal_years": len(ds.periods),
+            "excluded_sparse_periods": list(ds.excluded_periods)}
+
+
 def _summary(report: AnalysisReport) -> dict[str, Any]:
     latest = report.latest_period
     overall = report.overall()
@@ -219,6 +248,12 @@ def _summary(report: AnalysisReport) -> dict[str, Any]:
         "red_flag_evaluations": [
             {"rule": e.rule_code, "period": e.period, "status": e.status, "note": e.note}
             for e in report.red_flags.evaluations],
+        # FCFF of every fiscal year (same method as the DCF base year) - kept here because
+        # the hosted database keeps valuation inputs for the latest two years only
+        "fcff_history": _fcff_history(report),
+        # completeness of the core statement lines, measured on the full statements (the
+        # hosted database keeps only a subset of lines)
+        "data_completeness": _completeness(report),
         "ratios_calculated": sum(1 for o in report.ratios if o.ok),
         "ratios_total": len(report.ratios),
         "notes": report.notes,

@@ -61,8 +61,9 @@ def list_company_summaries(ctx: AppContext) -> list[dict[str, Any]]:
     """One row per company with its latest analysis summary (if any)."""
     rows = []
     with ctx.db.session_scope() as session:
+        latest_runs = repo.latest_analysis_runs(session)         # one query for all companies
         for company in repo.list_companies(session):
-            run = repo.latest_analysis_run(session, company.id)
+            run = latest_runs.get(company.id)
             summary = (run.summary or {}) if run else {}
             rows.append({
                 "ticker": company.ticker, "name": company.name, "sector": company.sector,

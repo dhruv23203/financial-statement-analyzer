@@ -141,6 +141,35 @@ def latest_analysis_run(session: Session, company_id: int,
         .order_by(desc(AnalysisRun.executed_at), desc(AnalysisRun.id)).limit(1))
 
 
+def latest_analysis_runs(session: Session, statuses: Iterable[str] = USABLE_RUN_STATUSES
+                         ) -> dict[int, AnalysisRun]:
+    """Latest usable analysis run of every company in ONE query (same ordering rule as
+    :func:`latest_analysis_run`: newest executed_at, then highest id)."""
+    latest: dict[int, int] = {}
+    # light pass over (company, id) only - full rows carry large JSON summaries
+    for company_id, run_id in session.execute(
+            select(AnalysisRun.company_id, AnalysisRun.id)
+            .where(AnalysisRun.status.in_(tuple(statuses)))
+            .order_by(AnalysisRun.company_id, AnalysisRun.executed_at, AnalysisRun.id)):
+        latest[company_id] = run_id        # later rows win -> newest per company
+    out: dict[int, AnalysisRun] = {}
+    ids = list(latest.values())
+    for chunk in (ids[i:i + 500] for i in range(0, len(ids), 500)):
+        for run in session.scalars(select(AnalysisRun).where(AnalysisRun.id.in_(chunk))):
+            out[run.company_id] = run
+    return out
+
+
+def latest_market_snapshots(session: Session) -> dict[int, MarketSnapshot]:
+    """Latest successful market snapshot of every company in ONE query."""
+    out: dict[int, MarketSnapshot] = {}
+    for snap in session.scalars(select(MarketSnapshot).where(
+            MarketSnapshot.status == RUN_SUCCESS)
+            .order_by(MarketSnapshot.company_id, MarketSnapshot.fetched_at, MarketSnapshot.id)):
+        out[snap.company_id] = snap
+    return out
+
+
 def analysis_runs_for_company(session: Session, company_id: int) -> Sequence[AnalysisRun]:
     return session.scalars(select(AnalysisRun).where(AnalysisRun.company_id == company_id)
                            .order_by(desc(AnalysisRun.id))).all()
