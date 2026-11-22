@@ -433,6 +433,22 @@ def cmd_analyze_universe(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_train_distress(args: argparse.Namespace) -> int:
+    """Train and evaluate the distress-onset models (chronological split)."""
+    from app.ml import train
+
+    report = train.train(_context(args), progress=out)
+    out(f"Deployed model: {report['deployed_model']} (protocol choice: "
+        f"{report['chosen_model']})")
+    for name, r in {**report["models"], **{k: {"test": v} for k, v in
+                                           report["baselines"].items()}}.items():
+        m = r["test"]
+        out(f"  {name}: ROC-AUC {m.get('roc_auc')} PR-AUC {m.get('pr_auc')} "
+            f"F1 {m.get('f1', '-')}")
+    out("Saved models/distress_model.json and models/distress_evaluation.json")
+    return 0
+
+
 def cmd_db_validate(args: argparse.Namespace) -> int:
     """Content checks: duplicates, interrupted runs, impossible or stale data, currency."""
     from app.database.validation import FAIL, validate_database
@@ -708,6 +724,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("tickers", nargs="+")
     add("analyze-universe", cmd_analyze_universe,
         "analyse every reference-universe company (for the screener)")
+    add("train-distress", cmd_train_distress,
+        "train/evaluate the ML distress-onset models (chronological split)")
     add("db-validate", cmd_db_validate,
         "content checks: duplicates, interrupted runs, stale or impossible data, currency")
     p = add("prune-analyses", cmd_prune_analyses,

@@ -1,0 +1,229 @@
+{
+  "generated_at": "2026-11-22",
+  "target": "distress onset: healthy company (net income > 0 and OCF > 0) in year t shows a net loss or negative OCF in fiscal year t+1 - a proxy, not default or bankruptcy",
+  "split": {
+    "train": {
+      "fiscal_years": [
+        "2021-12-31",
+        "2023-12-31"
+      ],
+      "label_years": [
+        2022,
+        2023,
+        2024
+      ],
+      "rows": 1047,
+      "positives": 37,
+      "companies": 732
+    },
+    "validation": {
+      "fiscal_years": [
+        "2024-01-31",
+        "2024-12-31"
+      ],
+      "label_years": [
+        2025
+      ],
+      "rows": 747,
+      "positives": 37,
+      "companies": 747
+    },
+    "test": {
+      "fiscal_years": [
+        "2025-01-31",
+        "2025-09-30"
+      ],
+      "label_years": [
+        2026
+      ],
+      "rows": 415,
+      "positives": 33,
+      "companies": 415
+    }
+  },
+  "features_used": [
+    "Net profit margin (%)",
+    "Return on assets (%)",
+    "Operating cash-flow margin (%)",
+    "Free-cash-flow margin (%)",
+    "Cash conversion (OCF / net income)",
+    "Current ratio",
+    "Debt ratio (liabilities / assets)",
+    "Interest coverage (signed log)",
+    "Asset turnover",
+    "Revenue growth (%)",
+    "Change in operating margin (pts)",
+    "Change in OCF margin (pts)",
+    "Accruals (NI - OCF) / total assets (%)"
+  ],
+  "features_dropped": [
+    {
+      "feature": "operating_profit_margin",
+      "correlated_with": "net_profit_margin",
+      "spearman": 0.863
+    }
+  ],
+  "selection_rule": "highest validation PR-AUC; logistic regression preferred when within 0.02",
+  "chosen_model": "XGBoost",
+  "models": {
+    "Logistic regression": {
+      "params": {
+        "C": 0.01
+      },
+      "validation_pr_auc": 0.1,
+      "test": {
+        "roc_auc": 0.791,
+        "pr_auc": 0.275,
+        "precision": 0.218,
+        "recall": 0.515,
+        "f1": 0.306,
+        "confusion_matrix": {
+          "tn": 321,
+          "fp": 61,
+          "fn": 16,
+          "tp": 17
+        },
+        "threshold": 0.5825,
+        "n": 415,
+        "positives": 33,
+        "brier": 0.2123,
+        "roc_auc_ci95": [
+          0.707,
+          0.871
+        ]
+      }
+    },
+    "Random forest": {
+      "params": {
+        "max_depth": 5,
+        "min_samples_leaf": 20
+      },
+      "validation_pr_auc": 0.187,
+      "test": {
+        "roc_auc": 0.778,
+        "pr_auc": 0.25,
+        "precision": 0.211,
+        "recall": 0.485,
+        "f1": 0.294,
+        "confusion_matrix": {
+          "tn": 322,
+          "fp": 60,
+          "fn": 17,
+          "tp": 16
+        },
+        "threshold": 0.4723,
+        "n": 415,
+        "positives": 33,
+        "brier": 0.1224,
+        "roc_auc_ci95": [
+          0.699,
+          0.851
+        ]
+      }
+    },
+    "XGBoost": {
+      "params": {
+        "max_depth": 2,
+        "n_estimators": 300
+      },
+      "validation_pr_auc": 0.223,
+      "test": {
+        "roc_auc": 0.762,
+        "pr_auc": 0.241,
+        "precision": 0.179,
+        "recall": 0.212,
+        "f1": 0.194,
+        "confusion_matrix": {
+          "tn": 350,
+          "fp": 32,
+          "fn": 26,
+          "tp": 7
+        },
+        "threshold": 0.6249,
+        "n": 415,
+        "positives": 33,
+        "brier": 0.1212,
+        "roc_auc_ci95": [
+          0.681,
+          0.832
+        ]
+      }
+    }
+  },
+  "baselines": {
+    "Two-ratio rule (-min(net margin, OCF margin))": {
+      "roc_auc": 0.712,
+      "pr_auc": 0.241,
+      "precision": 0.164,
+      "recall": 0.333,
+      "f1": 0.22,
+      "confusion_matrix": {
+        "tn": 326,
+        "fp": 56,
+        "fn": 22,
+        "tp": 11
+      },
+      "threshold": -3.5175,
+      "n": 415,
+      "positives": 33,
+      "roc_auc_ci95": [
+        0.62,
+        0.796
+      ]
+    },
+    "No skill (base rate)": {
+      "roc_auc": 0.5,
+      "pr_auc": 0.08,
+      "note": "predicting the base rate for everyone"
+    }
+  },
+  "importance": {
+    "Logistic regression (standardised coefficient)": {
+      "Net profit margin (%)": -0.049,
+      "Return on assets (%)": -0.273,
+      "Operating cash-flow margin (%)": -0.162,
+      "Free-cash-flow margin (%)": -0.012,
+      "Cash conversion (OCF / net income)": 0.228,
+      "Current ratio": 0.039,
+      "Debt ratio (liabilities / assets)": -0.066,
+      "Interest coverage (signed log)": -0.196,
+      "Asset turnover": -0.055,
+      "Revenue growth (%)": -0.016,
+      "Change in operating margin (pts)": -0.019,
+      "Change in OCF margin (pts)": -0.011,
+      "Accruals (NI - OCF) / total assets (%)": 0.441
+    },
+    "Random forest (impurity importance)": {
+      "Net profit margin (%)": 0.113,
+      "Return on assets (%)": 0.093,
+      "Operating cash-flow margin (%)": 0.115,
+      "Free-cash-flow margin (%)": 0.078,
+      "Cash conversion (OCF / net income)": 0.11,
+      "Current ratio": 0.073,
+      "Debt ratio (liabilities / assets)": 0.052,
+      "Interest coverage (signed log)": 0.074,
+      "Asset turnover": 0.084,
+      "Revenue growth (%)": 0.052,
+      "Change in operating margin (pts)": 0.022,
+      "Change in OCF margin (pts)": 0.03,
+      "Accruals (NI - OCF) / total assets (%)": 0.106
+    },
+    "XGBoost (gain importance)": {
+      "Net profit margin (%)": 0.063,
+      "Return on assets (%)": 0.125,
+      "Operating cash-flow margin (%)": 0.095,
+      "Free-cash-flow margin (%)": 0.06,
+      "Cash conversion (OCF / net income)": 0.088,
+      "Current ratio": 0.069,
+      "Debt ratio (liabilities / assets)": 0.063,
+      "Interest coverage (signed log)": 0.082,
+      "Asset turnover": 0.076,
+      "Revenue growth (%)": 0.076,
+      "Change in operating margin (pts)": 0.057,
+      "Change in OCF margin (pts)": 0.053,
+      "Accruals (NI - OCF) / total assets (%)": 0.092
+    }
+  },
+  "test_base_rate": 0.0795,
+  "deployed_model": "XGBoost"
+}

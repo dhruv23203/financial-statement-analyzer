@@ -1,0 +1,157 @@
+{
+  "model": "XGBoost (gradient-boosted trees, depth 2, class-weighted)",
+  "type": "xgboost",
+  "xgboost_file": "distress_xgb.json",
+  "version": "1.0.0",
+  "trained_at": "2026-11-22",
+  "preprocessor": {
+    "features": [
+      "net_profit_margin",
+      "return_on_assets",
+      "operating_cash_flow_margin",
+      "free_cash_flow_margin",
+      "cash_conversion",
+      "current_ratio",
+      "debt_ratio",
+      "interest_coverage_log",
+      "asset_turnover",
+      "revenue_growth",
+      "d_operating_margin",
+      "d_ocf_margin",
+      "accruals_to_assets"
+    ],
+    "lo": {
+      "net_profit_margin": 0.60603852,
+      "return_on_assets": 0.33624034,
+      "operating_cash_flow_margin": 1.20698024,
+      "free_cash_flow_margin": -28.9123628,
+      "cash_conversion": 0.16668145999999998,
+      "current_ratio": 0.31234523000000003,
+      "debt_ratio": 0.11570438,
+      "interest_coverage_log": 0.8210460784519993,
+      "asset_turnover": 0.08867422999999999,
+      "revenue_growth": -33.005614793939806,
+      "d_operating_margin": -15.75873425,
+      "d_ocf_margin": -19.761296390000002,
+      "accruals_to_assets": -15.716402906047339
+    },
+    "hi": {
+      "net_profit_margin": 49.98102785999997,
+      "return_on_assets": 32.489152219999866,
+      "operating_cash_flow_margin": 71.91222995999996,
+      "free_cash_flow_margin": 62.37444463999994,
+      "cash_conversion": 16.172626109999985,
+      "current_ratio": 9.897042740000012,
+      "debt_ratio": 1.3664406399999942,
+      "interest_coverage_log": 4.61512051684126,
+      "asset_turnover": 3.101575849999995,
+      "revenue_growth": 76.24747394562803,
+      "d_operating_margin": 25.823493750000004,
+      "d_ocf_margin": 33.94621818000001,
+      "accruals_to_assets": 11.656700406989962
+    },
+    "median": {
+      "net_profit_margin": 11.795992,
+      "return_on_assets": 7.7734565,
+      "operating_cash_flow_margin": 16.996173,
+      "free_cash_flow_margin": 9.6313225,
+      "cash_conversion": 1.4193785,
+      "current_ratio": 1.366108,
+      "debt_ratio": 0.5436535,
+      "interest_coverage_log": 2.324560064922471,
+      "asset_turnover": 0.704431,
+      "revenue_growth": 6.30913808052237,
+      "d_operating_margin": 0.6212220000000004,
+      "d_ocf_margin": 0.9832639999999984,
+      "accruals_to_assets": -3.091016360536536
+    },
+    "mean": {
+      "net_profit_margin": 13.89476745754738,
+      "return_on_assets": 9.306611143857301,
+      "operating_cash_flow_margin": 20.56539929297659,
+      "free_cash_flow_margin": 11.632573854024525,
+      "cash_conversion": 1.999901534147157,
+      "current_ratio": 1.8001939261204014,
+      "debt_ratio": 0.5591497984169452,
+      "interest_coverage_log": 2.5132205016001405,
+      "asset_turnover": 0.8261212349163879,
+      "revenue_growth": 7.060931203005895,
+      "d_operating_margin": 0.7212238821070236,
+      "d_ocf_margin": 1.4297008387346706,
+      "accruals_to_assets": -3.0535293177778633
+    },
+    "std": {
+      "net_profit_margin": 9.8750218784499,
+      "return_on_assets": 6.754235225409048,
+      "operating_cash_flow_margin": 14.41294957913946,
+      "free_cash_flow_margin": 14.683269572064193,
+      "cash_conversion": 2.2219852176021977,
+      "current_ratio": 1.4707518399691795,
+      "debt_ratio": 0.2359354689312703,
+      "interest_coverage_log": 1.051780709396496,
+      "asset_turnover": 0.5687838857132324,
+      "revenue_growth": 12.473832560008473,
+      "d_operating_margin": 4.038761666585848,
+      "d_ocf_margin": 6.057401537059315,
+      "accruals_to_assets": 4.506994497758718
+    }
+  },
+  "coefficients": [
+    -0.049393949044505614,
+    -0.27349209220593707,
+    -0.16246658359373153,
+    -0.011848612667014742,
+    0.22786288096240137,
+    0.03860942631377879,
+    -0.06608571753671523,
+    -0.1961418928550736,
+    -0.05451434154381945,
+    -0.016407007475150604,
+    -0.018576029246003056,
+    -0.011250678525387636,
+    0.4405013522488452
+  ],
+  "intercept": -0.23169557194616763,
+  "threshold": 0.6249001026153564,
+  "params": {
+    "max_depth": 2,
+    "n_estimators": 300
+  },
+  "max_missing_features": 4,
+  "test": {
+    "roc_auc": 0.762,
+    "pr_auc": 0.241,
+    "precision": 0.179,
+    "recall": 0.212,
+    "f1": 0.194,
+    "confusion_matrix": {
+      "tn": 350,
+      "fp": 32,
+      "fn": 26,
+      "tp": 7
+    },
+    "threshold": 0.6249,
+    "n": 415,
+    "positives": 33,
+    "brier": 0.1212,
+    "roc_auc_ci95": [
+      0.681,
+      0.832
+    ]
+  },
+  "training_period": {
+    "fiscal_years": [
+      "2021-12-31",
+      "2024-12-31"
+    ],
+    "label_years": [
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "rows": 1794,
+    "positives": 74
+  },
+  "chosen_by_protocol": true
+}
