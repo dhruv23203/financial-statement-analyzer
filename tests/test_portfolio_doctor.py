@@ -115,6 +115,11 @@ def test_weights_and_coverage_with_unanalysed_and_unpriced_holdings():
     assert (s["n"], s["n_priced"], s["n_analysed"]) == (3, 2, 1)
     assert s["analysed_coverage"] == pytest.approx(30_000 / 39_000)
     assert s["unanalysed_coverage"] == pytest.approx(9_000 / 39_000)
+    # Phase 1: weights cover priced holdings only - the denominator is disclosed.
+    # Cost basis: 10x2500 + 10x800 + 5x100 = 33,500; priced cost 33,000 -> 98.5%.
+    assert s["weight_basis"] == "priced holdings only"
+    assert s["cost_unpriced"] == pytest.approx(500.0)
+    assert s["priced_cost_share"] == pytest.approx(33_000 / 33_500)
 
 
 def test_composite_withheld_when_coverage_is_low():

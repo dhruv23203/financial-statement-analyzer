@@ -17,7 +17,8 @@ from app.reporting import plots, ui
 from app.services.advisor import ACTIONS, NO_DATA, advisor_frame, company_row, ideas
 from app.services.advisor import currency_symbol
 from app.valuation import capm
-from app.valuation.company import full_valuation, load_inputs
+from app.valuation import scenarios as scen
+from app.valuation.company import full_valuation, load_inputs, screening_valuation
 from app.valuation.dcf import ValuationError
 from app.services.portfolio_doctor import (CONFIG as PORTFOLIO_CONFIG, MAX_SECTOR_PCT,
                                            MAX_STOCK_PCT, MIN_COVERAGE, PRICE_MAX_AGE_DAYS,
@@ -87,6 +88,20 @@ def _val_gauge(score, label) -> go.Figure:
     return fig
 
 
+def _fcff_text(c: dict, sym: str) -> str:
+    """One-line FCFF build-up for the method actually used (see app/valuation/company.py)."""
+    if c.get("method") == "EBIT-based FCFF":
+        return (f"{c['method']}: EBIT {sym}{c['ebit']:,.0f} x (1 - {c['tax_rate']:.2%}) + D&A "
+                f"{sym}{c['depreciation_amortization']:,.0f} - capex "
+                f"{sym}{abs(c['capital_expenditure']):,.0f} + change in working capital "
+                f"{sym}{c['change_in_working_capital']:,.0f}")
+    return (f"{c.get('method', 'cash-flow FCFF')}: operating cash flow "
+            f"{sym}{c.get('operating_cash_flow', 0):,.0f} + after-tax interest "
+            f"{sym}{c.get('after_tax_interest', 0):,.0f} - capex "
+            f"{sym}{abs(c.get('capital_expenditure', 0)):,.0f}; interest paid classified as "
+            f"{c.get('interest_classification', 'unknown')}")
+
+
 @st.cache_data(ttl=86400, show_spinner="Estimating beta from 5 years of prices ...")
 def cached_beta(provider: str, ticker: str, benchmark: str, _ctx) -> dict | None:
     """Monthly-return beta against the market benchmark (5 years, refreshed daily).
@@ -94,14 +109,17 @@ def cached_beta(provider: str, ticker: str, benchmark: str, _ctx) -> dict | None
     if provider != "yfinance":
         return {"error": "Beta needs live prices (Yahoo Finance data source)."}
     try:
-        stock = _ctx.provider.fetch_price_history(ticker, "5y")
-        market = _ctx.provider.fetch_price_history(benchmark, "5y")
+        # adjusted for splits and dividends, so returns are total-return consistent
+        stock = _ctx.provider.fetch_price_history(ticker, "5y", adjusted=True)
+        market = _ctx.provider.fetch_price_history(benchmark, "5y", adjusted=True)
         if stock.empty or market.empty:
             return {"error": f"Price history unavailable for {ticker} or {benchmark}."}
         monthly = lambda f: f["Close"].resample("ME").last()  # noqa: E731
         cfg = capm.load_assumptions()["beta"]
         b = capm.estimate_beta(monthly(stock), monthly(market), benchmark, cfg["period"],
-                               cfg["interval"], cfg["min_observations"])
+                               cfg["interval"], cfg["min_observations"],
+                               "adjusted closes (splits and dividends), month-end, common "
+                               "months only")
         return vars(b)
     except ValuationError as exc:
         return {"error": str(exc)}
@@ -190,14 +208,10 @@ def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: int, prov
         if isinstance(d, dict):
             st.markdown("**Screening DCF (FCFF -> enterprise value -> equity value)**")
             c = d.get("fcff_components") or {}
-            st.caption(
-                f"Base FCFF {sym}{d['base_fcf']:,.0f} = operating cash flow "
-                f"{sym}{c.get('operating_cash_flow', 0):,.0f} + after-tax interest "
-                f"{sym}{c.get('after_tax_interest', 0):,.0f} - capex "
-                f"{sym}{abs(c.get('capital_expenditure', 0)):,.0f} (tax rate "
-                f"{c.get('tax_rate', 0):.2%}). Growth {d['growth']:+.1%} ({d.get('growth_note')}) "
-                f"for 5 years, fading to {d['terminal_growth']:.0%} terminal growth. Discount: "
-                f"{d.get('discount_note')}.")
+            st.caption(f"Base FCFF {sym}{d['base_fcf']:,.0f} - {_fcff_text(c, sym)}. "
+                       f"Growth {d['growth']:+.1%} ({d.get('growth_note')}) for 5 years, fading "
+                       f"to {d['terminal_growth']:.0%} terminal growth. Discount: "
+                       f"{d.get('discount_note')}.")
             bridge = d.get("bridge") or {}
             if bridge:
                 labels = {"enterprise_value": "Enterprise value (PV of FCFF + terminal value)",
@@ -210,6 +224,10 @@ def render_advisor_tab(ctx, selected: str | None, db_key: str, marker: int, prov
                                             "Amount": ui.compact_number(v, row.get("currency"))}
                                            for k, v in bridge.items()]),
                              hide_index=True, width="stretch")
+                sc = c.get("share_count") or {}
+                if sc.get("classification"):
+                    st.caption(f"Share count: {sc['shares']:,.0f} - {sc['classification']}; "
+                               f"as of {sc.get('as_of') or 'unknown date'}.")
                 st.caption(f"Equity value / {d.get('shares_source') or 'shares'} "
                            f"({d.get('shares') or 0:,.0f}) = {sym}{d['fair_value']:,.2f} per "
                            f"share. Terminal value share of the total: "
@@ -409,10 +427,16 @@ def render_portfolio_tab(ctx, db_key: str, marker: int, provider: str) -> None:
     show = t[["Symbol", "Company", "Sector", "Qty", "Avg cost", "Price", "Price source",
               "Price date", "Price status", "Weight %", "P&L %", "Health", "Valuation",
               "Verdict", "Action", "Why", "Price note"]].round(2).rename(
-        columns={"Verdict": "Screening result", "Action": "Observation", "Why": "Reason"})
+        columns={"Verdict": "Screening result", "Action": "Observation", "Why": "Reason",
+                 "Weight %": "Weight of priced holdings (%)"})
     st.dataframe(show, hide_index=True, width="stretch",
                  column_config={"Health": st.column_config.ProgressColumn(
                      "Health", min_value=0, max_value=100, format="%d")})
+    if s.get("n_unpriced"):
+        st.caption(f"Weights are shares of the {s['n_priced']} priced holding(s) only - "
+                   f"{s['n_unpriced']} unpriced holding(s) (cost basis "
+                   f"{_money(cur, s['cost_unpriced'])}) are outside the denominator, so "
+                   "these weights are not total-portfolio weights.")
     if len(out["excluded"]):
         with st.expander(f"{len(out['excluded'])} holding(s) in another currency (not included "
                          "above)"):
@@ -431,8 +455,8 @@ def render_portfolio_tab(ctx, db_key: str, marker: int, provider: str) -> None:
         p1.plotly_chart(plots._style(pie, 330, legend=False), width="stretch",
                         config=CHART_CONFIG, key="pf_pie")
         bars = plots.ranked_bars(dict(zip(priced["Company"], priced["Weight %"])),
-                                 f"Position size (%) - dotted line = {MAX_STOCK_PCT:.0f}% "
-                                 "illustrative limit", 330)
+                                 f"Weight of priced holdings (%) - dotted line = "
+                                 f"{MAX_STOCK_PCT:.0f}% illustrative limit", 330)
         bars.add_vline(x=MAX_STOCK_PCT, line_dash="dot", line_color=ui.DOWN)
         p2.plotly_chart(bars, width="stretch", config=CHART_CONFIG, key="pf_bars")
 
@@ -468,7 +492,8 @@ def render_full_valuation(ctx, provider: str, db_key: str, marker: int, ticker: 
              market["equity_risk_premium_source"]),
             ("Beta", f"{beta.beta:.2f}" if beta else "N/A",
              (f"OLS on {beta.observations} monthly returns vs {market['benchmark_name']} "
-              f"({beta.period}); R² {beta.r_squared:.2f}; Blume-adjusted {beta.blume_adjusted:.2f}"
+              f"({beta.period}, {beta.price_basis}); R² {beta.r_squared:.2f}; Blume-adjusted "
+              f"{beta.blume_adjusted:.2f}"
               f" (reference)") if beta else (beta_info or {}).get("error", "unavailable"))]
     w = v.wacc_detail
     if w is not None:
@@ -485,6 +510,10 @@ def render_full_valuation(ctx, provider: str, db_key: str, marker: int, ticker: 
                  hide_index=True, width="stretch")
     if not v.ok:
         st.info(f"Full valuation N/A: {v.reason}")
+        screen = screening_valuation(inputs)
+        if screen.ok:
+            render_valuation_research(screen, sym, inputs.currency,
+                                      "screening DCF (fixed screening discount rate, not WACC)")
         return
     _html(ui.cards([
         ("Enterprise value", ui.compact_number(v.dcf.enterprise_value, inputs.currency),
@@ -500,3 +529,50 @@ def render_full_valuation(ctx, provider: str, db_key: str, marker: int, ticker: 
     st.caption("Market inputs (risk-free rate, equity risk premium, tax) are dated in "
                "config/valuation_assumptions.json; beta uses live Yahoo Finance prices. "
                + DISCLAIMER)
+    render_valuation_research(v, sym, inputs.currency, "CAPM / WACC DCF")
+
+
+def render_valuation_research(v, sym: str, currency: str | None, basis: str) -> None:
+    """Sensitivity grid, bear/base/bull and reverse DCF for one valuation (same engine,
+    same base FCFF, bridge and share count - only the named inputs change)."""
+    _html(ui.section("Valuation research", f"how much the answer depends on the inputs - "
+                                           f"{basis}"))
+    st.markdown("**Sensitivity: value per share by discount rate and terminal growth**")
+    grid = scen.sensitivity_grid(v)
+    if not grid.empty:
+        shown = grid.copy()
+        shown.index = [f"{r:.1%}" + (" (base)" if abs(r - v.discount_rate) < 1e-9 else "")
+                       for r in grid.index]
+        shown.columns = [f"g {g:.1%}" + (" (base)" if abs(g - v.terminal_growth) < 1e-9
+                                        else "") for g in grid.columns]
+        shown.index.name = "Discount rate"
+        st.dataframe(shown.map(lambda x: f"{sym}{x:,.0f}" if x is not None and pd.notna(x)
+                               else "N/A"), width="stretch")
+        st.caption("Each cell re-runs the same DCF with only the discount rate and terminal "
+                   "growth changed. N/A = rate not above terminal growth (Gordon model "
+                   "undefined).")
+    st.markdown("**Scenarios** (assumption sets, not forecasts or probabilities)")
+    cases = scen.scenarios(v)
+    if cases:
+        st.dataframe(pd.DataFrame([{
+            "Case": c.name, "Growth (yrs 1-5)": f"{c.growth:+.1%}",
+            "Discount rate": f"{c.rate:.2%}", "Terminal growth": f"{c.terminal:.1%}",
+            "Value / share": f"{sym}{c.value_per_share:,.0f}" if c.value_per_share is not None
+            else "N/A",
+            "vs price": f"{c.vs_price:+.0%}" if c.vs_price is not None else "N/A"}
+            for c in cases]), hide_index=True, width="stretch")
+        st.caption("Bear: growth -3 pts, rate +1 pt, terminal -1 pt. Bull: growth +3 pts, "
+                   "rate -1 pt, terminal +0.5 pt. Growth stays inside the forecast bounds. "
+                   "Defined in config/valuation_assumptions.json.")
+    st.markdown("**Reverse DCF: what growth does the current price imply?**")
+    rd = scen.reverse_dcf(v)
+    if rd.implied_growth is not None:
+        _html(ui.cards([
+            ("Implied growth (yrs 1-5)", f"{rd.implied_growth:+.1%}",
+             f"at price {sym}{rd.price:,.0f}", None),
+            ("Model growth", f"{rd.model_growth:+.1%}", v.growth_source or "", None),
+            ("Gap", f"{(rd.implied_growth - rd.model_growth) * 100:+.1f} pts",
+             "price expects more" if rd.implied_growth > rd.model_growth else
+             "price expects less", None)]))
+    st.caption(rd.note + " Implied growth describes market expectations under this model; "
+               "it is not a forecast.")

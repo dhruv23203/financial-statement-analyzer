@@ -38,29 +38,67 @@
   "forecast": {
     "explicit_years": 5,
     "fade_years": 5,
-    "min_growth": -0.10,
+    "min_growth": -0.1,
     "max_growth": 0.15,
     "growth_note": "Explicit-period growth = historical revenue CAGR, bounded to [-10%, +15%]; negative history is kept negative. Years 6-10 fade linearly to the terminal growth rate."
   },
   "cost_of_debt": {
     "method": "interest expense / average total debt (pre-tax), accepted when between the risk-free rate and risk-free + 10 percentage points; otherwise the debt weight is used with the risk-free rate + 2% and a warning",
-    "max_spread": 0.10,
+    "max_spread": 0.1,
     "fallback_spread": 0.02
   },
   "screening": {
     "description": "The universe-wide screen uses fixed screening discount rates instead of a computed WACC (no beta for every company). They are disclosed as screening assumptions, not WACC.",
     "discount_rates": {
-      "INR": {"conservative": 0.13, "moderate": 0.12, "aggressive": 0.11},
-      "USD": {"conservative": 0.10, "moderate": 0.09, "aggressive": 0.08}
+      "INR": {
+        "conservative": 0.13,
+        "moderate": 0.12,
+        "aggressive": 0.11
+      },
+      "USD": {
+        "conservative": 0.1,
+        "moderate": 0.09,
+        "aggressive": 0.08
+      }
     },
-    "growth_haircut": {"conservative": 0.6, "moderate": 0.8, "aggressive": 1.0},
-    "margin_of_safety": 0.20
+    "growth_haircut": {
+      "conservative": 0.6,
+      "moderate": 0.8,
+      "aggressive": 1.0
+    },
+    "margin_of_safety": 0.2
   },
   "valuation_score": {
     "status": "ILLUSTRATIVE",
     "note": "Composite of available valuation checks. Weights are a documented project choice (equal), not statistically validated; the result is an illustrative composite score, not a validated valuation rating.",
-    "weights": {"dcf_mos": 1.0, "pe_vs_sector": 1.0, "pb_vs_sector": 1.0, "peg": 1.0, "fcf_yield": 1.0},
+    "weights": {
+      "dcf_mos": 1.0,
+      "pe_vs_sector": 1.0,
+      "pb_vs_sector": 1.0,
+      "peg": 1.0,
+      "fcf_yield": 1.0
+    },
     "min_components": 2,
     "min_sector_peers": 5
+  },
+  "scenarios": {
+    "description": "Bear / base / bull are assumption sets around the base DCF, not forecasts or probabilities. Deltas are absolute (0.01 = 1 percentage point); scenario growth stays inside the forecast bounds.",
+    "cases": {
+      "Bear": {
+        "growth_delta": -0.03,
+        "rate_delta": 0.01,
+        "terminal_delta": -0.01
+      },
+      "Base": {
+        "growth_delta": 0.0,
+        "rate_delta": 0.0,
+        "terminal_delta": 0.0
+      },
+      "Bull": {
+        "growth_delta": 0.03,
+        "rate_delta": -0.01,
+        "terminal_delta": 0.005
+      }
+    }
   }
 }

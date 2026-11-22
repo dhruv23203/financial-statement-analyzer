@@ -20,6 +20,8 @@ Conventions (stated so a manual calculation can reproduce every number):
 
 from __future__ import annotations
 
+import math
+
 from dataclasses import dataclass, field
 from typing import Sequence
 
@@ -60,6 +62,22 @@ class DCFResult:
         return self.pv_terminal_value / total if total else float("nan")
 
 
+def require_finite(name: str, value: float | None, allow_none: bool = False) -> None:
+    """Reject NaN and +/-infinity at calculation boundaries (inputs, cash flows, terminal
+    value, bridge items, results) so a non-finite number is never rendered or exported."""
+    if value is None:
+        if allow_none:
+            return
+        raise ValuationError(f"{name} is missing.")
+    try:
+        ok = math.isfinite(float(value))
+    except (TypeError, ValueError):
+        ok = False
+    if not ok:
+        raise ValuationError(f"{name} is not a finite number ({value!r}); the calculation "
+                             "was stopped rather than producing a meaningless result.")
+
+
 def check_pairing(basis: str, rate_kind: str) -> None:
     """FCFF must be discounted at WACC and FCFE at the cost of equity - nothing else."""
     if VALID_PAIRS.get(basis) != rate_kind:
@@ -73,6 +91,9 @@ def project_cash_flows(base: float, growth: float, terminal_growth: float,
     """Cash flows for years 1..N: ``explicit_years`` at ``growth``, then ``fade_years`` with
     the growth rate moving linearly from ``growth`` to ``terminal_growth``.
     Negative growth is allowed (a shrinking business is valued as shrinking)."""
+    for name, v in (("Base cash flow", base), ("Growth rate", growth),
+                    ("Terminal growth", terminal_growth)):
+        require_finite(name, v)
     flows, cf = [], float(base)
     for t in range(1, explicit_years + fade_years + 1):
         if t <= explicit_years:
@@ -101,6 +122,10 @@ def discount_cash_flows(cash_flows: Sequence[float], rate: float, terminal_growt
     check_pairing(basis, rate_kind)
     if not cash_flows:
         raise ValuationError("No forecast cash flows.")
+    require_finite("Discount rate", rate)
+    require_finite("Terminal growth", terminal_growth)
+    for i, cf in enumerate(cash_flows, 1):
+        require_finite(f"Forecast cash flow (year {i})", cf)
     if rate <= -1:
         raise ValuationError("Discount rate must be greater than -100%.")
     warnings = []
@@ -118,7 +143,9 @@ def discount_cash_flows(cash_flows: Sequence[float], rate: float, terminal_growt
     if cash_flows[-1] <= 0:
         warnings.append("The final forecast cash flow is not positive, so the terminal value "
                         "is not positive: the business does not create value at these inputs.")
+    require_finite("Terminal value", tv)
     total = pv_forecast + pv_tv
+    require_finite("Present value", total)
     return DCFResult(basis, rate_kind, rate, terminal_growth, list(cash_flows), factors,
                      pv_flows, pv_forecast, tv, pv_tv,
                      enterprise_value=total if basis == FCFF else None,
@@ -137,6 +164,11 @@ def equity_bridge(enterprise_value: float, cash: float | None, debt: float | Non
     if debt is None:
         raise ValuationError("Total debt is missing: the enterprise-to-equity bridge cannot "
                              "be completed.")
+    for name, v in (("Enterprise value", enterprise_value), ("Cash", cash), ("Total debt", debt),
+                    ("Minority interest", minority_interest),
+                    ("Other senior claims", other_senior_claims),
+                    ("Non-operating assets", non_operating_assets)):
+        require_finite(name, v, allow_none=True)
     notes = []
     if minority_interest is None:
         notes.append("Minority interest not reported: treated as not applicable.")
@@ -179,8 +211,11 @@ def _per_share(result: DCFResult, shares: float | None) -> None:
     if shares is None or shares <= 0:
         raise ValuationError("Diluted shares outstanding are missing or not positive: value "
                              "per share cannot be calculated.")
+    require_finite("Share count", shares)
+    require_finite("Equity value", result.equity_value)
     result.shares = shares
     result.value_per_share = result.equity_value / shares
+    require_finite("Value per share", result.value_per_share)
     if result.equity_value <= 0:
         result.warnings.append("Equity value is not positive: debt and other claims exceed "
                                "the value of operations at these inputs.")

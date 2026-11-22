@@ -313,6 +313,10 @@ def analyse_portfolio(holdings: pd.DataFrame, advisor: pd.DataFrame,
         "n": int(len(t)), "n_priced": int(priced.sum()), "n_unpriced": int((~priced).sum()),
         "n_analysed": int(len(analysed)),
         "invested": float(t["Invested"].sum()), "invested_priced": invested_priced,
+        # share of the cost basis that has a current price (the weight denominator)
+        "priced_cost_share": (invested_priced / float(t["Invested"].sum())
+                              if float(t["Invested"].sum()) else None),
+        "weight_basis": "priced holdings only" if (~priced).any() else "all holdings",
         "cost_unpriced": float(t.loc[~priced, "Invested"].sum()),
         "value": total if priced.any() else None,
         "pnl": (total - invested_priced) if priced.any() else None,

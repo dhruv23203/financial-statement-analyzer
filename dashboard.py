@@ -23,6 +23,7 @@ from app.analysis.ratios import RATIO_DEFINITIONS
 from app.reporting import plots, tables, ui
 from app.reporting.advisor_tabs import render_advisor_tab, render_portfolio_tab
 from app.reporting.methodology_tab import render_methodology_tab
+from app.services import quarterly
 from app.services.context import AppContext, build_context
 from app.services.pipeline import company_history, run_pipeline
 from app.services.screener import (field_descriptions, find_peers, latest_analysis_id,
@@ -77,6 +78,18 @@ def cached_summaries(db_path: str, analysis_marker: int) -> list[dict]:
 def cached_prices(provider: str, ticker: str, period: str) -> pd.DataFrame:
     """Live price history for the chart (display only, refreshed hourly)."""
     return get_context(provider).provider.fetch_price_history(ticker, period)
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner="Loading quarterly statements ...")
+def cached_quarterly(provider: str, ticker: str) -> tuple[pd.DataFrame, str | None]:
+    """Quarterly income and cash-flow statements from the provider (display only)."""
+    prov = get_context(provider).provider
+    try:
+        income = prov.fetch_statement(ticker, "income_statement", "quarterly")
+        cash = prov.fetch_statement(ticker, "cash_flow", "quarterly")
+    except Exception as exc:  # noqa: BLE001 - provider failure is shown, not hidden
+        return pd.DataFrame(), f"Quarterly statements unavailable: {exc}"
+    return quarterly.quarterly_table(income, cash), None
 
 
 @st.cache_resource(max_entries=64)
@@ -507,6 +520,46 @@ def render_flag_status(analysis: StoredAnalysis) -> None:
                                   "Reason": e.get("note") or ""} for e in evaluations]))
 
 
+def render_quarterly(analysis: StoredAnalysis) -> None:
+    """Fiscal quarters, QoQ / YoY growth, margins and TTM (rules in app/services/quarterly)."""
+    table, error = cached_quarterly(PROVIDER, analysis.ticker)
+    if error or table.empty:
+        st.info(error or "No quarterly statements from the data source for this company.")
+        return
+    factor, unit = scale_for(analysis.currency)
+    label = lambda d: d.strftime("%b %Y")  # noqa: E731 - fiscal quarter-end month
+    t = quarterly.ttm(table)
+    if t["values"]:
+        q0, q1 = t["quarters"][0], t["quarters"][-1]
+        html(ui.cards([(f"TTM {m.lower()}", ui.compact_number(v, analysis.currency) if v
+                        is not None else "N/A", f"{label(q0)} - {label(q1)} quarters", None)
+                       for m, v in t["values"].items()
+                       if m in ("Revenue", "Net income", "Operating cash flow",
+                                "Free cash flow")]))
+    else:
+        st.caption(t["note"])
+    shown = (table.drop(columns=["Capital expenditure"], errors="ignore") / factor).T
+    shown.columns = [label(d) for d in table.index]
+    st.markdown(f"**Quarterly figures** ({unit}; columns = fiscal quarter-end)")
+    show_table(shown.round(1))
+    g = quarterly.growth(table, "Revenue")
+    m = quarterly.margins(table)
+    if not g.empty or not m.empty:
+        both = pd.concat([g.add_prefix("Revenue "), m], axis=1).T
+        both.columns = [label(d) for d in table.index]
+        st.markdown("**Revenue growth and margins**")
+        show_table(both.map(lambda x: f"{x:+.1%}" if pd.notna(x) else "N/A"))
+        if "Revenue" in table:
+            # ISO year-month labels so the category axis sorts chronologically
+            chart(plots.line_chart({"Revenue": {d.strftime("%Y-%m"): v / factor for d, v
+                                                in table["Revenue"].items() if pd.notna(v)}},
+                                   unit), key="quarterly_revenue")
+    st.caption("Source: data provider quarterly statements (fiscal quarters, not calendar "
+               "quarters). QoQ only between consecutive quarters; YoY only against the same "
+               "fiscal quarter a year earlier; TTM only when the last four quarters are all "
+               "reported - otherwise N/A. Display only: not used in the health score.")
+
+
 def render_company(analysis: StoredAnalysis) -> None:
     check = analysis.currency_check
     live = PROVIDER == "yfinance"
@@ -547,8 +600,10 @@ def render_company(analysis: StoredAnalysis) -> None:
                    "trends, red flags, published scores).")
 
     html(ui.section("Financials", f"amounts in {scale_for(analysis.currency)[1]}"))
-    t_fin, t_ratio, t_score, t_trend = st.tabs(
-        ["Key financials", "Ratios", "Score history", "Trends"])
+    t_fin, t_q, t_ratio, t_score, t_trend = st.tabs(
+        ["Key financials", "Quarterly & TTM", "Ratios", "Score history", "Trends"])
+    with t_q:
+        render_quarterly(analysis)
     with t_fin:
         factor, unit = scale_for(analysis.currency)
         data = key_financials(analysis)

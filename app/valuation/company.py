@@ -1,12 +1,27 @@
 """Company valuation: statement inputs -> FCFF -> forecast -> discount -> equity bridge.
 
-FCFF is derived from the cash-flow statement (the standard indirect approximation):
+FCFF (unlevered free cash flow to the firm) is built with the conventional formula when
+every input is reported:
 
-    FCFF = operating cash flow + interest expense x (1 - tax rate) - capital expenditure
+    FCFF = EBIT x (1 - tax rate) + D&A - capital expenditure - increase in net working capital
 
-(operating cash flow is after interest, so after-tax interest is added back to obtain the
-cash flow available to all capital providers). The tax rate is the market's statutory
-rate from ``config/valuation_assumptions.json``.
+(the cash-flow statement's "change in working capital" already carries the cash sign, so
+it is added: a negative value is an investment in working capital). Without EBIT, D&A or
+the working-capital change the cash-flow route is used, and interest is added back only
+when the reporting standard places interest paid in operating activities:
+
+    FCFF ~ operating cash flow - capital expenditure [+ interest x (1 - tax rate)]
+
+* USD filers (US GAAP, ASC 230): interest paid is an operating cash flow, so after-tax
+  interest is added back;
+* INR filers (Ind AS 7): non-financial companies normally classify interest paid as a
+  financing cash flow, so operating cash flow is already before interest and adding it
+  back would double-count - no add-back;
+* otherwise the classification is unknown: no add-back, and the result is labelled
+  "OCF - CapEx (approximation)" rather than validated FCFF.
+
+The method and the interest classification are recorded with every result. The tax rate
+is the market's statutory rate from ``config/valuation_assumptions.json``.
 
 Two discount-rate options, both applied to FCFF and followed by the same equity bridge:
 
@@ -21,6 +36,7 @@ Missing inputs are never replaced by zero: the result explains what is missing.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -38,7 +54,17 @@ INPUT_METRICS = ("total_revenue", "operating_cash_flow", "capital_expenditure",
                  "interest_expense", "interest_expense_non_operating", "total_debt",
                  "cash_and_equivalents", "cash_and_short_term_investments",
                  "minority_interest", "diluted_average_shares", "ordinary_shares_number",
-                 "stockholders_equity")
+                 "stockholders_equity", "ebit", "reconciled_depreciation",
+                 "depreciation_amortization_cf", "change_in_working_capital")
+# Where interest paid sits in the cash-flow statement, by reporting currency (proxy for
+# the reporting standard). Anything else is "unknown" and gets no add-back.
+INTEREST_CLASSIFICATION = {"USD": ("operating", "US GAAP (ASC 230): interest paid is an "
+                                   "operating cash flow"),
+                           "INR": ("financing", "Ind AS 7: interest paid by non-financial "
+                                   "companies is normally a financing cash flow")}
+# The current share count from the market snapshot is used unless it disagrees with the
+# reported period-end count by more than this (e.g. a provider quoting one share class).
+SHARE_COUNT_TOLERANCE = 0.25
 FINANCIAL_SECTORS = ("Financial Services",)
 
 
@@ -52,6 +78,7 @@ class ValuationInputs:
     price_currency: str | None = None
     market_cap: float | None = None
     price_date: str | None = None
+    shares_outstanding: float | None = None   # current, from the market snapshot (basic)
 
     @property
     def latest(self) -> dict[str, float]:
@@ -114,6 +141,8 @@ def load_inputs(ctx: AppContext, tickers: list[str] | None = None) -> dict[str, 
                 item.market_cap = float(snap.market_cap) if snap.market_cap is not None else None
                 item.price_currency = snap.currency
                 item.price_date = snap.fetched_at.date().isoformat() if snap.fetched_at else None
+                item.shares_outstanding = (float(snap.shares_outstanding)
+                                           if snap.shares_outstanding is not None else None)
             out[company.ticker] = item
             run_to_ticker[run.fetch_run_id] = company.ticker
         ids = list(run_to_ticker)
@@ -129,27 +158,76 @@ def load_inputs(ctx: AppContext, tickers: list[str] | None = None) -> dict[str, 
 
 
 # ----------------------------------------------------------------------------- building blocks
-def fcff_base(values: dict[str, float], tax_rate: float) -> tuple[float, dict[str, Any],
-                                                                 list[str]]:
-    """FCFF of one fiscal year from the cash-flow statement."""
-    ocf, capex = values.get("operating_cash_flow"), values.get("capital_expenditure")
+def _finite(v) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+def fcff_base(values: dict[str, float], tax_rate: float, currency: str | None = None
+              ) -> tuple[float, dict[str, Any], list[str]]:
+    """FCFF of one fiscal year. EBIT-based when EBIT, D&A, capex and the working-capital
+    change are all reported; otherwise the cash-flow route with the interest add-back
+    decided by the interest-paid classification (see the module docstring)."""
+    if not 0 <= tax_rate < 1:
+        raise ValuationError(f"Tax rate {tax_rate} must be between 0 and 1.")
+    v = {k: _finite(x) for k, x in values.items()}
+    capex = v.get("capital_expenditure")
+    ebit = v.get("ebit")
+    da = v.get("reconciled_depreciation")
+    if da is None:
+        da = v.get("depreciation_amortization_cf")
+    d_wc = v.get("change_in_working_capital")
+    warnings: list[str] = []
+    if capex is not None and None not in (ebit, da, d_wc):
+        nopat = ebit * (1 - tax_rate) if ebit > 0 else ebit   # no tax shield on a loss
+        fcff = nopat + abs(da) - abs(capex) + d_wc
+        parts = {"method": "EBIT-based FCFF", "ebit": ebit, "nopat": nopat,
+                 "depreciation_amortization": abs(da), "capital_expenditure": -abs(capex),
+                 "change_in_working_capital": d_wc, "fcff": fcff, "tax_rate": tax_rate,
+                 "interest_classification": "not needed (starts from EBIT)",
+                 "after_tax_interest": 0.0,
+                 "formula": "EBIT x (1 - t) + D&A - CapEx + change in working capital "
+                            "(cash-flow sign)"}
+        if ebit <= 0:
+            warnings.append("EBIT is not positive: no tax is applied to the operating loss.")
+        return fcff, parts, warnings
+
+    ocf = v.get("operating_cash_flow")
     if ocf is None or capex is None:
-        missing = [n for n, v in (("operating cash flow", ocf), ("capital expenditure", capex))
-                   if v is None]
+        missing = [n for n, x in (("operating cash flow", ocf), ("capital expenditure", capex))
+                   if x is None]
         raise ValuationError(f"FCFF cannot be calculated: {', '.join(missing)} not reported.")
-    interest = values.get("interest_expense", values.get("interest_expense_non_operating"))
-    warnings = []
-    debt = values.get("total_debt")
+    classification, basis = INTEREST_CLASSIFICATION.get(
+        currency or "", ("unknown", "reporting standard not identified"))
+    interest = v.get("interest_expense")
     if interest is None:
-        if debt:
-            warnings.append("Interest expense not reported although the company has debt: "
-                            "the after-tax interest add-back is omitted (FCFF understated).")
-        add_back = 0.0
+        interest = v.get("interest_expense_non_operating")
+    add_back = 0.0
+    if classification == "operating":
+        if interest is None:
+            if v.get("total_debt"):
+                warnings.append("Interest expense not reported although the company has debt: "
+                                "the after-tax interest add-back is omitted (FCFF understated).")
+        else:
+            add_back = abs(interest) * (1 - tax_rate)
+        method = "Cash-flow FCFF (OCF + after-tax interest - CapEx)"
+    elif classification == "financing":
+        method = "Cash-flow FCFF (OCF - CapEx; interest already outside OCF)"
     else:
-        add_back = abs(interest) * (1 - tax_rate)
+        method = "OCF - CapEx (approximation, not validated FCFF)"
+        warnings.append("Interest-paid classification unknown: no interest add-back, so this "
+                        "is operating cash flow less capex, not a fully validated FCFF.")
+    missing_ebit = [n for n, x in (("EBIT", ebit), ("D&A", da),
+                                   ("working-capital change", d_wc)) if x is None]
+    warnings.append(f"EBIT-based FCFF not possible ({', '.join(missing_ebit)} not reported): "
+                    f"cash-flow route used - {basis}.")
     fcff = ocf + add_back - abs(capex)
-    parts = {"operating_cash_flow": ocf, "after_tax_interest": add_back,
-             "capital_expenditure": -abs(capex), "fcff": fcff, "tax_rate": tax_rate}
+    parts = {"method": method, "operating_cash_flow": ocf, "after_tax_interest": add_back,
+             "capital_expenditure": -abs(capex), "fcff": fcff, "tax_rate": tax_rate,
+             "interest_classification": f"{classification} ({basis})"}
     return fcff, parts, warnings
 
 
@@ -175,13 +253,57 @@ def revenue_growth(inputs: ValuationInputs, min_growth: float, max_growth: float
     return bounded, note, warnings
 
 
+def select_share_count(inputs: ValuationInputs) -> dict[str, Any]:
+    """Share count for per-share value, in order of preference:
+
+    1. current shares outstanding from the dated market snapshot - unless it differs from
+       the reported period-end count by more than SHARE_COUNT_TOLERANCE (a sign that the
+       provider quotes a single share class);
+    2. ordinary shares outstanding at the latest balance-sheet date;
+    3. diluted weighted-average shares of the latest fiscal year (a period average, not a
+       point-in-time count - disclosed as such).
+
+    No provider used here reports a current *diluted* count, so the chosen count is basic
+    and the result says so. Returns shares, source, as_of, classification and warnings."""
+    latest, period = inputs.latest, inputs.latest_period
+    period_txt = period.isoformat() if period else "latest period"
+    reported = _finite(latest.get("ordinary_shares_number"))
+    current = _finite(inputs.shares_outstanding)
+    diluted_avg = _finite(latest.get("diluted_average_shares"))
+    warnings: list[str] = []
+    if current and current > 0:
+        if reported and reported > 0 and abs(current / reported - 1) > SHARE_COUNT_TOLERANCE:
+            warnings.append(f"Market-snapshot share count ({current:,.0f}) differs from the "
+                            f"reported {period_txt} count ({reported:,.0f}) by more than "
+                            f"{SHARE_COUNT_TOLERANCE:.0%}; the reported count is used.")
+        else:
+            return {"shares": current, "as_of": inputs.price_date,
+                    "classification": "current, basic (not diluted)",
+                    "source": f"current shares outstanding (market snapshot "
+                              f"{inputs.price_date or 'date unknown'}; basic, not diluted)",
+                    "warnings": warnings + ["Current diluted share count not available: basic "
+                                            "current shares used (dilution not included)."]}
+    if reported and reported > 0:
+        return {"shares": reported, "as_of": period_txt,
+                "classification": "period-end, basic (not diluted)",
+                "source": f"ordinary shares outstanding at {period_txt} (basic, not diluted)",
+                "warnings": warnings + ["Current share count not used: period-end ordinary "
+                                        "shares (fallback; dilution not included)."]}
+    if diluted_avg and diluted_avg > 0:
+        return {"shares": diluted_avg, "as_of": period_txt,
+                "classification": "weighted average over the fiscal year, diluted",
+                "source": f"diluted weighted-average shares, fiscal year to {period_txt} "
+                          "(a period average, not a current count)",
+                "warnings": warnings + ["Only a weighted-average share count is reported: it "
+                                        "may differ from the current count (fallback)."]}
+    return {"shares": None, "as_of": None, "classification": None, "source": None,
+            "warnings": warnings}
+
+
 def diluted_shares(inputs: ValuationInputs) -> tuple[float | None, str | None]:
-    latest = inputs.latest
-    if latest.get("diluted_average_shares"):
-        return latest["diluted_average_shares"], "diluted average shares (latest year)"
-    if latest.get("ordinary_shares_number"):
-        return latest["ordinary_shares_number"], "ordinary shares outstanding (not diluted)"
-    return None, None
+    """Backward-compatible wrapper: (shares, source) from :func:`select_share_count`."""
+    sel = select_share_count(inputs)
+    return sel["shares"], sel["source"]
 
 
 def cash_balance(values: dict[str, float]) -> float | None:
@@ -205,7 +327,7 @@ def _value(inputs: ValuationInputs, rate: float, method: str, rate_note: str,
     try:
         market = capm.market_assumptions(inputs.currency)
         tax = market["statutory_tax_rate"]
-        base, parts, warnings = fcff_base(inputs.latest, tax)
+        base, parts, warnings = fcff_base(inputs.latest, tax, inputs.currency)
         if base <= 0:
             return CompanyValuation("INSUFFICIENT_DATA",
                                     f"Latest FCFF is negative ({base:,.0f}); a DCF projected "
@@ -218,7 +340,9 @@ def _value(inputs: ValuationInputs, rate: float, method: str, rate_note: str,
         terminal = market["terminal_growth"]
         flows = project_cash_flows(base, growth, terminal, cfg["explicit_years"],
                                    cfg["fade_years"])
-        shares, shares_src = diluted_shares(inputs)
+        share_sel = select_share_count(inputs)
+        shares, shares_src = share_sel["shares"], share_sel["source"]
+        warnings = warnings + share_sel["warnings"]
         latest = inputs.latest
         result = value_firm(flows, rate, terminal, cash=cash_balance(latest),
                             debt=latest.get("total_debt"), shares=shares,
@@ -230,8 +354,8 @@ def _value(inputs: ValuationInputs, rate: float, method: str, rate_note: str,
                            rate_note, terminal, shares_src, result.value_per_share,
                            warnings=warnings + g_warn + result.warnings,
                            wacc_detail=wacc_detail)
-    if shares_src and "not diluted" in shares_src:
-        out.warnings.append("Diluted share count not reported; ordinary shares used.")
+    out.fcff_components["share_count"] = {k: share_sel[k] for k in
+                                          ("shares", "source", "as_of", "classification")}
     # Market comparison is optional: intrinsic value does not need the price.
     if inputs.price is not None and inputs.price_currency == inputs.currency:
         out.price = inputs.price

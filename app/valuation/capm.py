@@ -51,26 +51,31 @@ class BetaEstimate:
     benchmark: str
     period: str
     interval: str
+    price_basis: str = "close prices (basis not recorded)"
 
 
 def estimate_beta(stock_prices: pd.Series, market_prices: pd.Series, benchmark: str,
                   period: str = "5y", interval: str = "1mo",
-                  min_observations: int = 36) -> BetaEstimate:
+                  min_observations: int = 36,
+                  price_basis: str = "close prices (basis not recorded)") -> BetaEstimate:
     """OLS beta of the stock's simple returns on the benchmark's, over common dates only
     (periods missing in either series are dropped, not filled)."""
     joined = pd.concat([stock_prices.rename("s"), market_prices.rename("m")], axis=1,
-                       join="inner").dropna()
+                       join="inner", sort=True).dropna()
     returns = joined.pct_change().dropna()
     n = len(returns)
     if n < min_observations:
         raise ValuationError(f"Only {n} common return observations against {benchmark} "
                              f"(need {min_observations}); beta not estimated.")
+    if not np.isfinite(returns.to_numpy()).all():
+        raise ValuationError("Non-finite returns in the price series; beta not estimated.")
     var_m = float(returns["m"].var(ddof=1))
     if var_m == 0:
         raise ValuationError("Benchmark returns have zero variance; beta undefined.")
     beta = float(returns["s"].cov(returns["m"]) / var_m)
     r2 = float(np.corrcoef(returns["s"], returns["m"])[0, 1] ** 2)
-    return BetaEstimate(beta, 0.67 * beta + 0.33, r2, n, benchmark, period, interval)
+    return BetaEstimate(beta, 0.67 * beta + 0.33, r2, n, benchmark, period, interval,
+                        price_basis)
 
 
 def cost_of_equity(risk_free: float, beta: float, equity_risk_premium: float) -> float:

@@ -96,11 +96,14 @@ class YFinanceProvider(FinancialDataProvider):
             self._info_cache[ticker] = info if isinstance(info, dict) else {}
         return self._info_cache[ticker]
 
-    def fetch_price_history(self, ticker: str, period: str = "1y") -> pd.DataFrame:
+    def fetch_price_history(self, ticker: str, period: str = "1y",
+                            adjusted: bool = False) -> pd.DataFrame:
+        """OHLCV history. ``adjusted=True`` returns prices adjusted for splits and
+        dividends (total-return consistent) - used for beta; charts use raw closes."""
         interval = "1wk" if period in ("5y", "10y", "max") else "1d"
         try:
             frame = self._ticker(ticker).history(period=period, interval=interval,
-                                                 auto_adjust=False)
+                                                 auto_adjust=adjusted)
         except Exception as exc:  # display-only data: log and show nothing
             logger.warning("yfinance price history failed for %s", ticker,
                            extra={"ticker": ticker, "error": repr(exc)})

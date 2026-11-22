@@ -7,6 +7,7 @@ the page always describes exactly what the running app does.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pandas as pd
@@ -16,6 +17,7 @@ from app.analysis.ratios import RATIO_DEFINITIONS
 from app.reporting import ui
 from app.services.portfolio_doctor import CONFIG as PORTFOLIO_CONFIG
 from app.valuation.capm import load_assumptions
+from config.settings import CONFIG_DIR
 from app.valuation.dcf import value_firm
 
 RATIO_STATUSES = pd.DataFrame([
@@ -154,6 +156,7 @@ def render_methodology_tab(scoring: dict[str, Any], red_flags: dict[str, Any]) -
         st.caption(f"Not applicable to {sector}: {', '.join(c.split('_')[0] for c in codes)} - "
                    "reported as 'not evaluated' with the reason.")
 
+    render_validation_evidence()
     render_valuation_method()
     render_portfolio_method()
 
@@ -165,13 +168,49 @@ def render_methodology_tab(scoring: dict[str, Any], red_flags: dict[str, Any]) -
                "docs/DATA_VALIDATION.md, docs/AUDIT_REPORT.md.")
 
 
+def render_validation_evidence() -> None:
+    """Does the score mean anything, and is the data right? Numbers come from
+    config/validation_evidence.json (copied from the calibration and validation runs)."""
+    path = CONFIG_DIR / "validation_evidence.json"
+    if not path.is_file():
+        return
+    ev = json.loads(path.read_text(encoding="utf-8"))
+    sv, dv = ev["score_validation"], ev["data_validation"]
+    st.markdown(ui.section("Evidence: is the score useful, is the data right?",
+                           "out-of-sample test and checks against official filings"),
+                unsafe_allow_html=True)
+    base = sv["baseline_auc"]
+    counts = dv["status_counts"]
+    st.markdown(ui.cards([
+        ("Out-of-sample AUC", f"{sv['oof_auc']:.2f}",
+         f"95% CI {sv['oof_auc_ci'][0]:.2f}-{sv['oof_auc_ci'][1]:.2f}", None),
+        ("Equal-weight baseline", f"{base.get('EQUAL', float('nan')):.2f}",
+         f"CRITIC-only {base.get('CRITIC', float('nan')):.2f}", None),
+        ("Sample", f"{sv['observations']:,}", f"company-years, {sv['companies']} companies",
+         None),
+        ("Filing checks matching", f"{counts.get('MATCH', 0)} / {dv['checks']}",
+         f"{counts.get('CLOSE', 0)} close, {counts.get('DIFFERENT', 0)} different", None),
+    ]), unsafe_allow_html=True)
+    st.caption(
+        f"Score test: {sv['method']}. Label: {sv['label']}; {sv['positive_rate']:.1%} of "
+        "company-years are positive. AUC 0.5 = no better than chance, 1.0 = perfect "
+        f"ranking. Generated {sv['generated_at'][:10]}.")
+    st.caption(
+        f"Data check: {dv['checks']} stored values for {dv['companies']} companies compared "
+        f"with {dv['reference']} ({dv['thresholds']}); accessed {dv['accessed_on']}. "
+        f"Scope: {dv['scope_note']}.")
+
+
 def render_valuation_method() -> None:
     a = load_assumptions()
     st.markdown(ui.section("Valuation (Quality & Value tab)",
                            "FCFF discounted at WACC, then the equity bridge"), unsafe_allow_html=True)
     st.markdown(
-        "1. **FCFF** = operating cash flow + interest x (1 - tax rate) - capital expenditure "
-        "(latest fiscal year).\n"
+        "1. **FCFF** = EBIT x (1 - tax rate) + D&A - capital expenditure + change in working "
+        "capital (latest fiscal year). If any of these is missing: operating cash flow - capex, "
+        "plus after-tax interest only where interest paid is an operating cash flow (US GAAP); "
+        "Indian (Ind AS 7) filers report interest paid under financing, so it is not added "
+        "back. The method used is shown with every valuation.\n"
         f"2. **Forecast**: {a['forecast']['explicit_years']} years at the historical revenue CAGR "
         f"bounded to [{a['forecast']['min_growth']:+.0%}, {a['forecast']['max_growth']:+.0%}] "
         "(negative history stays negative), then a linear fade to terminal growth over "
@@ -179,13 +218,16 @@ def render_valuation_method() -> None:
         "3. **Discount rate**: the universe screen uses a fixed, disclosed *screening discount "
         "rate* (not a computed WACC). The selected company's full valuation uses **WACC** = "
         "E/(D+E) x Ke + D/(D+E) x Kd x (1 - t), with **Ke = Rf + beta x ERP** (CAPM) and beta "
-        "from 5 years of monthly returns against NIFTY 50 / S&P 500.\n"
+        "from 5 years of monthly returns (prices adjusted for splits and dividends) against "
+        "NIFTY 50 / S&P 500.\n"
         "4. **Terminal value** (Gordon growth) = FCFF_N x (1 + g) / (WACC - g), valid only if "
         "WACC > g; otherwise the valuation is reported as invalid.\n"
         "5. **Enterprise value** = PV of forecast FCFF + PV of terminal value (year-end "
         "discounting).\n"
         "6. **Equity value** = EV + cash and short-term investments - total debt - minority "
-        "interest; **value per share** = equity value / diluted shares.\n"
+        "interest; **value per share** = equity value / share count (current shares from the "
+        "dated market snapshot, else period-end ordinary shares, else diluted weighted-average "
+        "shares - the count, source and date are shown).\n"
         "7. FCFF is never discounted at the cost of equity, and FCFE never at WACC (the engine "
         "rejects those pairings). Intrinsic value does not need the market price; the price is "
         "only used for the comparison.")

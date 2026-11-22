@@ -175,8 +175,19 @@ def _inputs(**overrides):
 
 
 def test_fcff_from_cash_flow_statement():
+    # Phase 1 methodology change: the after-tax interest add-back depends on where interest
+    # paid is classified. US GAAP (USD): operating -> add back 20 x 0.75 = 15.
+    fcff, parts, _ = fcff_base(_inputs().latest, tax_rate=0.25, currency="USD")
+    assert fcff == pytest.approx(200 + 20 * 0.75 - 60)
+    assert parts["interest_classification"].startswith("operating")
+    # Ind AS 7 (INR): interest paid is a financing flow, OCF is already before interest ->
+    # adding it back would double count.
+    fcff, parts, _ = fcff_base(_inputs().latest, tax_rate=0.25, currency="INR")
+    assert fcff == pytest.approx(200 - 60) and parts["after_tax_interest"] == 0
+    # Unknown standard: no add-back and labelled as an approximation.
     fcff, parts, warnings = fcff_base(_inputs().latest, tax_rate=0.25)
-    assert fcff == pytest.approx(200 + 20 * 0.75 - 60) and not warnings
+    assert fcff == pytest.approx(140) and "approximation" in parts["method"]
+    assert any("classification unknown" in w for w in warnings)
     with pytest.raises(ValuationError, match="capital expenditure"):
         fcff_base({"operating_cash_flow": 100}, 0.25)
 

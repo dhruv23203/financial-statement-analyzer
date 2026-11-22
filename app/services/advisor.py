@@ -76,11 +76,20 @@ def _curve(name: str, x: float) -> float:
 
 
 def _num(v) -> float | None:
+    """Float, or None for missing, NaN and +/-infinity (never rendered or scored)."""
     try:
         f = float(v)
     except (TypeError, ValueError):
         return None
-    return None if np.isnan(f) else f
+    return f if np.isfinite(f) else None
+
+
+def meaningful_multiple(v) -> float | None:
+    """A price multiple is meaningful only when finite and strictly positive. A negative
+    P/E (losses) or P/B (negative book equity) is "not meaningful" (N/M) - it is never
+    read as cheap, scored, or used in a peer median."""
+    f = _num(v)
+    return f if (f is not None and f > 0) else None
 
 
 def currency_symbol(code: str | None) -> str:
@@ -134,7 +143,8 @@ def _value_row(r: pd.Series, peer_pe: tuple[float | None, str | None],
     """Valuation checks for one company. ``peer_pe`` / ``peer_pb`` are (median, basis)
     where basis says which peer group was used (or why none was available)."""
     is_fin = r.get("sector") in FINANCIAL_SECTORS
-    pe, pb = _num(r.get("price_to_earnings")), _num(r.get("price_to_book"))
+    raw_pe, raw_pb = _num(r.get("price_to_earnings")), _num(r.get("price_to_book"))
+    pe, pb = meaningful_multiple(raw_pe), meaningful_multiple(raw_pb)
     mcap = _num(r.get("market_cap"))
     rev, fcf_m = _num(r.get("revenue")), _num(r.get("free_cash_flow_margin"))
     ni_g = _num(r.get("net_income_cagr"))
@@ -188,6 +198,9 @@ def _value_row(r: pd.Series, peer_pe: tuple[float | None, str | None],
         if pe_basis and pe_basis.startswith("market"):
             notes.append(f"Fewer than {MIN_SECTOR_PEERS} same-market sector peers: P/E compared "
                          f"with the {pe_basis} median instead (fallback).")
+    elif raw_pe is not None:
+        notes.append(f"P/E is not meaningful (N/M: {raw_pe:.1f}, non-positive earnings) - "
+                     "not scored and not treated as cheap.")
     elif pe is None:
         notes.append("P/E not available (loss-making or no market snapshot).")
     elif pe_med is None:
@@ -195,10 +208,16 @@ def _value_row(r: pd.Series, peer_pe: tuple[float | None, str | None],
     pb_med, pb_basis = peer_pb
     if is_fin and pb and pb_med:
         add("pb_vs_sector", pb / pb_med, f"P/B {pb:.2f} vs {pb_basis} median {pb_med:.2f}")
-    peg = pe / ni_g if (pe and ni_g and ni_g > 0) else None
-    if peg:
+    elif is_fin and raw_pb is not None and pb is None:
+        notes.append(f"P/B is not meaningful (N/M: {raw_pb:.2f}, non-positive book equity) - "
+                     "not scored.")
+    # PEG only from a meaningful (positive) P/E and positive earnings growth.
+    peg = pe / ni_g if (pe is not None and ni_g is not None and ni_g > 0) else None
+    peg = peg if (peg is not None and np.isfinite(peg) and peg > 0) else None
+    if peg is not None:
         add("peg", peg, f"PEG {peg:.2f} (P/E {pe:.1f} / {ni_g:.0f}% profit CAGR)")
-    fcf_yield = fcf / mcap * 100 if (fcf is not None and mcap and not is_fin) else None
+    fcf_yield = (fcf / mcap * 100 if (fcf is not None and mcap is not None and mcap > 0
+                                      and not is_fin) else None)
     if fcf_yield is not None:
         add("fcf_yield", fcf_yield, f"Free-cash-flow yield {fcf_yield:.1f}%")
 
@@ -218,7 +237,11 @@ def _value_row(r: pd.Series, peer_pe: tuple[float | None, str | None],
     else:
         score, label = None, NO_DATA
         notes.append(f"Fewer than {SCORE_CFG['min_components']} valuation checks were possible.")
+    dcf_state = ("available" if dcf is not None else
+                 "not applicable" if (valuation is not None and valuation.status ==
+                                      "NOT_APPLICABLE") else "unavailable")
     return {"val_score": score, "val_label": label, "components": comps, "dcf": dcf,
+            "dcf_state": dcf_state, "pe_meaningful": pe, "pb_meaningful": pb,
             "peg": peg, "fcf_yield": fcf_yield, "val_notes": notes,
             "val_components_used": len(comps), "val_components_applicable": len(applicable),
             "val_coverage": round(coverage, 3),
@@ -249,6 +272,9 @@ def decide(tier: str | None, val: dict[str, Any], currency: str) -> dict[str, An
     if tier is None:
         key = "NODATA"
     elif tier == "high":
+        # Quality alone never produces the "price below model value" result: it needs a
+        # DCF model value and a dated price at or below the margin-of-safety price
+        # (checked below). Without them the valuation is "not conclusive".
         key = {UNDERVALUED: "BUY", FAIR: "BUY", OVERVALUED: "WAIT"}.get(label, "BUY_CHECK")
     elif tier == "mid":
         key = {UNDERVALUED: "RESEARCH", OVERVALUED: "NOADD"}.get(label, "HOLD")
@@ -284,6 +310,11 @@ def decide(tier: str | None, val: dict[str, Any], currency: str) -> dict[str, An
             why.append(f"The price {sym}{price:,.0f} is below the DCF model value but above "
                        f"the margin-of-safety price {sym}{d['buy_below']:,.0f} (model value less "
                        f"{MARGIN_OF_SAFETY * 100:.0f}%).")
+    if d is None and key == "BUY":
+        key = "BUY_CHECK"
+        why.append(f"DCF {val.get('dcf_state', 'unavailable')}: without a model value and a "
+                   "dated price the result cannot say the price is below model value; the "
+                   "relative multiples alone are not conclusive.")
     if label != NO_DATA:
         why.append(f"Price looks {label.lower()} (valuation score {val['val_score']:.0f}/100).")
     else:
@@ -309,6 +340,9 @@ def peer_median(frame: pd.DataFrame, column: str, market: str, sector: str | Non
     if column not in frame:
         return None, None
     same_market = frame[frame["_mkt"] == market]
+    values = pd.to_numeric(same_market[column], errors="coerce")
+    # only meaningful multiples (finite, > 0) enter a peer median
+    same_market = same_market.assign(**{column: values.where(np.isfinite(values) & (values > 0))})
     sector_values = same_market.loc[same_market["sector"] == sector, column].dropna()
     if sector is not None and len(sector_values) >= MIN_SECTOR_PEERS:
         return _num(sector_values.median()), f"{market} {sector} sector"

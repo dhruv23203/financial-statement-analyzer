@@ -1,0 +1,35 @@
+{
+  "description": "Headline numbers copied from docs/calibration/calibration_results.json and docs/validation/validation_results.csv (regenerate after recalibration).",
+  "score_validation": {
+    "generated_at": "2026-11-11T14:12:48.919060+00:00",
+    "label": "distress proxy: next-year net loss or negative operating cash flow (a proxy, not observed bankruptcy or default)",
+    "method": "standardised logistic regression on the five category scores; 5-fold GroupKFold by company (no company in both train and test); out-of-fold ROC AUC with company-level bootstrap 95% CI",
+    "observations": 2459,
+    "companies": 827,
+    "positive_rate": 0.098,
+    "oof_auc": 0.82,
+    "oof_auc_ci": [
+      0.785,
+      0.854
+    ],
+    "baseline_auc": {
+      "EQUAL": 0.782,
+      "CRITIC": 0.783,
+      "ENTROPY": 0.767
+    },
+    "accepted": true
+  },
+  "data_validation": {
+    "accessed_on": "2026-11-12",
+    "checks": 110,
+    "companies": 10,
+    "status_counts": {
+      "MATCH": 104,
+      "DIFFERENT": 4,
+      "CLOSE": 2
+    },
+    "thresholds": "MATCH <= 0.5%, CLOSE <= 2%, otherwise DIFFERENT",
+    "reference": "SEC EDGAR XBRL 10-K filings",
+    "scope_note": "US companies only; Indian companies have not yet been checked against their annual reports"
+  }
+}
